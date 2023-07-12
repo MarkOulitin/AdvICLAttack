@@ -29,7 +29,7 @@ def chunk_size_helper(params: dict) -> int:
     return bs
 
 
-def random_sampling(sentences: list(str), labels: list(int), num: int) -> Tuple[list(str), list(int)]:
+def random_sampling(sentences: list[str], labels: list[int], num: int) -> Tuple[list[str], list[int]]:
     """Randomly sample subset of the training pairs"""
     assert len(sentences) == len(labels)
     if num > len(labels):

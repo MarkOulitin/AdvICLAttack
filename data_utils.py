@@ -39,7 +39,7 @@ def load_trec(root_dir):
 
                 sentence = ' '.join(line.split(' ')[1:]).strip()
                 # basic cleaning
-                sentence = sentence.replace(" 's", "'s").replace('`` ', '"').replace(" ''",'"').replace(' ?','?').replace(' ,',',')
+                sentence = sentence.replace(" 's", "'s").replace('`` ', '"').replace(" ''", '"').replace(' ?', '?').replace(' ,', ',')
                 sentences.append(sentence)
 
         return sentences, labels

@@ -8,7 +8,7 @@ from tqdm import tqdm
 from utils import ROOT_DIR
 
 
-def setup_llama() -> LlamaCpp:
+def setup_llama(device: str) -> LlamaCpp:
     model_file_name = "llama-ggml-model-q4_0.bin"
     local_path = f"./models/{model_file_name}"
 
@@ -28,10 +28,13 @@ def setup_llama() -> LlamaCpp:
         # The model file already exists, so skip download.
         print(f"Model file already exists at {local_path}. Skipping download.")
 
-    n_gpu_layers = 40
-    n_batch = 256
-    llm = LlamaCpp(model_path=local_path, n_gpu_layers=n_gpu_layers, n_batch=n_batch,
-                   logits_all=True, verbose=True)
+    if device == 'cpu':
+        llm = LlamaCpp(model_path=local_path, logits_all=True, verbose=True)
+    else:
+        n_gpu_layers = 40
+        n_batch = 256
+        llm = LlamaCpp(model_path=local_path, n_gpu_layers=n_gpu_layers, n_batch=n_batch,
+                       logits_all=True, verbose=True)
 
     return llm
 

@@ -1,5 +1,9 @@
-import openai
+from typing import Tuple
 
+import openai
+from langchain import LlamaCpp
+
+from llm_setups import setup_llama
 from utils import chunks, chunk_size_helper
 
 
@@ -32,8 +36,23 @@ def create_completion_llama(prompt: str,
                             num_logprobs: int = None,
                             stop: str = "\n",
                             echo=False,
-                            n=None):
-    pass
+                            llm: LlamaCpp = None) -> dict:
+    if llm is None:
+        llm = setup_llama()
+
+    response = llm(prompt, max_tokens=max_tokens, stop=[stop], logprobs=num_logprobs,
+                   temperature=temperature, echo=echo)
+
+    return response
+    # print("response:")
+    # print(response)
+    # print()
+    #
+    # print("text:")
+    # print(response['choices'][0]['text'].strip())
+    # print()
+    # print("logprob:")
+    # print(response['choices'][0]['logprobs']['token_logprobs'][0])
 
 
 def create_completion_gpt3(prompt: str,
@@ -42,7 +61,7 @@ def create_completion_gpt3(prompt: str,
                            num_logprobs: int = None,
                            stop: str = "\n",
                            echo=False,
-                           n=None):
+                           n=None) -> dict:
     return openai.Completion.create(
         model="text-davinci-003",
         prompt=prompt,
@@ -62,14 +81,14 @@ def create_completion(prompt: str,
                       num_logprobs: int = None,
                       stop: str = "\n",
                       echo=False,
-                      n=None):
+                      n=None) -> dict:
     """Complete the prompt using a language model"""
 
     assert max_tokens >= 0
     assert temperature >= 0.0
 
     if 'llama' in model_name:
-        pass
+        return create_completion_llama(prompt, max_tokens, temperature, num_logprobs, stop, echo)
 
     elif 'gpt3' in model_name:
         return create_completion_gpt3(prompt, max_tokens, temperature, num_logprobs, stop, echo, n)
@@ -77,12 +96,11 @@ def create_completion(prompt: str,
         raise NotImplementedError
 
 
-
 def get_model_response(params: dict,
                        train_sentences: list[str],
                        train_labels: list[int],
                        test_sentences: list[str],
-                       num_tokens_to_predict_override: int = None):
+                       num_tokens_to_predict_override: int = None) -> Tuple[list[dict], list[str]]:
     """
     Get model's responses on test sentences, given the training examples
     :param params: parameters for the experiment
