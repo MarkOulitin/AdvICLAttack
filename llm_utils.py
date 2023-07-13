@@ -1,5 +1,6 @@
 from typing import Tuple
 
+import numpy as np
 import openai
 from langchain import LlamaCpp
 
@@ -128,3 +129,36 @@ def get_model_response(params: dict,
             all_raw_answers.append(answer)
 
     return all_raw_answers, prompts
+
+
+def get_probs(params: dict, num_classes: int, llm_response: dict):
+    top_logprobs = llm_response['logprobs']['top_logprobs'][0]  # [0] since we only ask for complete one more token
+    probs = [0] * num_classes
+
+    for j, label_list in params['label_dict'].items():
+        for label in label_list:  # each possible label correspond to the same class
+            label = " " + label  # notice prompt does not have space after 'A:'
+            if label in top_logprobs:
+                probs[j] += np.exp(top_logprobs[label])
+
+    probs = np.array(probs)
+    probs = probs / np.sum(probs)  # normalize to 1
+
+    return probs
+
+
+def get_all_probs(params: dict, raw_resp: list[dict], test_sentences: list[str]) -> np.array:
+    """Obtain model's label probability for each of the test examples. The returned prob is normalized"""
+    assert len(raw_resp) == len(test_sentences)
+
+    num_classes = len(params['label_dict'].keys())
+
+    # Fill in the labels that is in the top k prob
+    all_label_probs = []
+    for i, llm_response in enumerate(raw_resp):
+        label_probs = get_probs(params, num_classes, llm_response)
+        all_label_probs.append(label_probs)
+
+    all_label_probs = np.array(all_label_probs)  # probs are normalized
+
+    return all_label_probs
