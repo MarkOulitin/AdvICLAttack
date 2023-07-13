@@ -79,7 +79,7 @@ def run_experiments(params_list):
             train_sentences, train_labels = random_sampling(all_train_sentences, all_train_labels, params['num_shots'])
 
             # choose important example based on their importance score
-            
+
             # sort important words based on their importance score
 
             # loop until success - generate bug then evaluate
@@ -117,6 +117,39 @@ def run_experiments(params_list):
         # if 'prompt_func' in result_to_save['params'].keys():
         #     params_to_save['prompt_func'] = None
         # save_experiment_data_pickle(params, result_to_save)
+
+
+def get_probs(params: dict, num_classes: int, llm_response: dict):
+    top_logprobs = llm_response['logprobs']['top_logprobs'][0]  # [0] since we only ask for complete one more token
+    probs = [0] * num_classes
+
+    for j, label_list in params['label_dict'].items():
+        for label in label_list:  # each possible label correspond to the same class
+            label = " " + label  # notice prompt does not have space after 'A:'
+            if label in top_logprobs:
+                probs[j] += np.exp(top_logprobs[label])
+
+    probs = np.array(probs)
+    probs = probs / np.sum(probs)  # normalize to 1
+
+    return probs
+
+
+def get_all_probs(params: dict, raw_resp: list[dict], test_sentences: list[str]) -> np.array:
+    """Obtain model's label probability for each of the test examples. The returned prob is normalized"""
+    assert len(raw_resp) == len(test_sentences)
+
+    num_classes = len(params['label_dict'].keys())
+
+    # Fill in the labels that is in the top k prob
+    all_label_probs = []
+    for i, llm_response in enumerate(raw_resp):
+        label_probs = get_probs(params, num_classes, llm_response)
+        all_label_probs.append(label_probs)
+
+    all_label_probs = np.array(all_label_probs)  # probs are normalized
+
+    return all_label_probs
 
 
 def eval_accuracy(all_label_probs, test_labels):
@@ -161,8 +194,6 @@ if __name__ == '__main__':
     # flags
     parser.add_argument('--use_saved_results', dest='use_saved_results', action='store_const', const=True, default=False,
                         help='whether to load the results from pickle files and not run the model')
-    parser.add_argument('--approx', dest='approx', action='store_const', const=True, default=False,
-                        help='whether to set token prob to zero if not in top 100') # TODO LG check
 
     args = parser.parse_args()
     args = vars(args)
