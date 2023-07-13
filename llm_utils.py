@@ -36,7 +36,7 @@ def create_completion_llama(prompt: str,
                             num_logprobs: int = None,
                             stop: str = "\n",
                             echo=False,
-                            llm: LlamaCpp = None) -> dict:
+                            llm: Llama = None) -> dict:
     if llm is None:
         llm = setup_llama()
 
