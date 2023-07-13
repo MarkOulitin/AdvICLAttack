@@ -29,11 +29,13 @@ def chunk_size_helper(params: dict) -> int:
     return bs
 
 
-def random_sampling(sentences: list[str], labels: list[int], num: int) -> Tuple[list[str], list[int]]:
+def random_sampling(sentences: list[str], labels: list[int], num: int, seed: int = 0) -> Tuple[list[str], list[int]]:
     """Randomly sample subset of the training pairs"""
     assert len(sentences) == len(labels)
     if num > len(labels):
         assert False, f"number of samples [{num}] is more than the total size of the pool {len(labels)}, can't perform random sampling"
+
+    np.random.seed(seed)
 
     idxs = np.random.choice(len(labels), size=num, replace=False)
     selected_sentences = [sentences[i] for i in idxs]
@@ -65,3 +67,8 @@ def save_experiment_data_pickle(params: dict, data: dict) -> dict:
     print(f"Saved to {file_name}")
 
     return data
+
+
+def load_results(params_list: list[dict]):
+    # load saved results
+    raise NotImplementedError
