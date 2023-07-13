@@ -82,8 +82,8 @@ def load_dataset(params):
         params['prompt_prefix'] = "Choose sentiment from Positive or Negative.\n\n"
         params["q_prefix"] = "Review: "
         params["a_prefix"] = "Sentiment: "
-        params['label_dict'] = {0: ['Negative'], 1: ['Positive']}
-        params['inv_label_dict'] = {'Negative': 0, 'Positive': 1}
+        params['label_dict'] = {0: ['negative'], 1: ['positive']}
+        params['inv_label_dict'] = {'negative': 0, 'positive': 1}
         params['task_format'] = 'classification'
         params['num_tokens_to_predict'] = 1
 
