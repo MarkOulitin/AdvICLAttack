@@ -93,7 +93,7 @@ class ICLExampleSelector:
         self._strategy = strategy
 
     def select_example_and_update_metadata_inplace(self, icl_input: ICLInput) -> None:
-        self.strategy.select_example(icl_input)
+        self.strategy.select_example_and_update_metadata_inplace(icl_input)
 
 
 class ICLClassificationGoalFunctionResult(ClassificationGoalFunctionResult):
