@@ -2,7 +2,7 @@ from typing import Tuple
 
 import numpy as np
 import openai
-from langchain import LlamaCpp
+from llama_cpp import Llama
 
 from llm_setups import setup_llama
 from utils import chunks, chunk_size_helper
@@ -37,9 +37,10 @@ def create_completion_llama(prompt: str,
                             num_logprobs: int = None,
                             stop: str = "\n",
                             echo=False,
-                            llm: Llama = None) -> dict:
+                            llm: Llama = None,
+                            device: str = 'cpu') -> dict:
     if llm is None:
-        llm = setup_llama()
+        llm = setup_llama(device)
 
     response = llm(prompt, max_tokens=max_tokens, stop=[stop], logprobs=num_logprobs,
                    temperature=temperature, echo=echo)
@@ -81,15 +82,16 @@ def create_completion(prompt: str,
                       temperature: float = 0.0,
                       num_logprobs: int = None,
                       stop: str = "\n",
-                      echo=False,
-                      n=None) -> dict:
+                      echo: bool = False,
+                      n: int = None,
+                      device: str = "cpu") -> dict:
     """Complete the prompt using a language model"""
 
     assert max_tokens >= 0
     assert temperature >= 0.0
 
     if 'llama' in model_name:
-        return create_completion_llama(prompt, max_tokens, temperature, num_logprobs, stop, echo)
+        return create_completion_llama(prompt, max_tokens, temperature, num_logprobs, stop, echo, device=device)
 
     elif 'gpt3' in model_name:
         return create_completion_gpt3(prompt, max_tokens, temperature, num_logprobs, stop, echo, n)
@@ -124,7 +126,7 @@ def get_model_response(params: dict,
         else:
             num_tokens_to_predict = params['num_tokens_to_predict']
         resp = create_completion(test_chunk_prompts, num_tokens_to_predict, params['model'],
-                                 num_logprobs=params['api_num_log_prob'])
+                                 num_logprobs=params['api_num_logprob'])
         for answer_id, answer in enumerate(resp['choices']):
             all_raw_answers.append(answer)
 
