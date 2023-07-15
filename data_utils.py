@@ -1,5 +1,7 @@
 import pandas as pd
 from utils import ROOT_DIR
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
 
 
 def load_sst2():
@@ -23,7 +25,7 @@ def load_sst2():
     return train_sentences, train_labels, test_sentences, test_labels
 
 
-def load_trec(root_dir):
+def load_trec():
     """Loads the TREC dataset and returns the train and test sentences and labels."""
 
     label_dict = {'NUM': 0, 'LOC': 1, 'HUM': 2, 'DESC': 3, 'ENTY': 4, 'ABBR': 5}
@@ -31,7 +33,7 @@ def load_trec(root_dir):
     def _load_file(filename):
         sentences = []
         labels = []
-        with open(f"{root_dir}/data/trec/{filename}", "r") as f:
+        with open(f"{ROOT_DIR}/data/trec/{filename}", "r") as f:
             for line in f:
                 label = line.split(' ')[0].split(':')[0]
                 label = label_dict[label]
@@ -50,11 +52,11 @@ def load_trec(root_dir):
     return train_sentences, train_labels, test_sentences, test_labels
 
 
-def load_dbpedia(root_dir):
+def load_dbpedia():
     """Loads the DBpedia dataset and returns the train and test sentences and labels."""
 
-    train_data = pd.read_csv(f"{root_dir}/data/dbpedia/train_subset.csv")
-    test_data = pd.read_csv(f"{root_dir}/data/dbpedia/test.csv")
+    train_data = pd.read_csv(f"{ROOT_DIR}/data/dbpedia/train_subset.csv")
+    test_data = pd.read_csv(f"{ROOT_DIR}/data/dbpedia/test.csv")
 
     train_sentences = train_data["Text"].tolist()
     train_sentences = [sentence.replace('""', '"') for sentence in train_sentences]
@@ -70,6 +72,25 @@ def load_dbpedia(root_dir):
     return train_sentences, train_labels, test_sentences, test_labels
 
 
+def load_sms_spam():
+    """Loads the SMS-spam dataset and returns the train and test sentences and labels."""
+
+    df = pd.read_csv(f"{ROOT_DIR}/data/sms-spam/spam.csv", encoding=('ISO-8859-1'), low_memory=False)
+    df.drop(columns=['Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4'], inplace=True)
+    df.rename(columns={'v1': 'target', 'v2': 'text'}, inplace=True)
+
+    encoder = LabelEncoder()
+    encoder.fit_transform(df['target'])
+    df['target'] = encoder.fit_transform(df['target'])
+
+    X = df['test'].values
+    y = df['target'].values
+
+    train_sentences, test_sentences, train_labels, test_labels = train_test_split(X, y, test_size=0.2, random_state=2)
+
+    return train_sentences.tolist(), train_labels.tolist(), test_sentences.tolist(), test_labels.tolist()
+
+
 def load_dataset(params):
     """
     Load train and test data
@@ -79,7 +100,7 @@ def load_dataset(params):
 
     if params['dataset'] == 'sst2':
         orig_train_sentences, orig_train_labels, orig_test_sentences, orig_test_labels = load_sst2()
-        params['prompt_prefix'] = "Choose sentiment from Positive or Negative.\n\n"
+        params['prompt_prefix'] = "Choose sentiment from positive or negative.\n\n"
         params["q_prefix"] = "Review: "
         params["a_prefix"] = "Sentiment: "
         params['label_dict'] = {0: ['negative'], 1: ['positive']}
@@ -107,8 +128,17 @@ def load_dataset(params):
         params['task_format'] = 'classification'
         params['num_tokens_to_predict'] = 1
 
+    elif params['dataset'] == 'sms-spam':
+        orig_train_sentences, orig_train_labels, orig_test_sentences, orig_test_labels = load_sms_spam()
+        params['prompt_prefix'] = "Choose if sms text is ham or spam.\n\n"
+        params["q_prefix"] = "SMS: "
+        params["a_prefix"] = "Answer: "
+        params['label_dict'] = {0: ['ham'], 1: ['spam']}
+        params['inv_label_dict'] = {'ham': 0, 'spam': 1}
+        params['task_format'] = 'classification'
+        params['num_tokens_to_predict'] = 1
+
     else:
         raise NotImplementedError
-
 
     return orig_train_sentences, orig_train_labels, orig_test_sentences, orig_test_labels
