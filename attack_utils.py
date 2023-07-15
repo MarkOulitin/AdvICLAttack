@@ -1,15 +1,138 @@
+from copy import deepcopy
+from dataclasses import dataclass
+
 import numpy as np
+import textattack
+import torch
 from textattack import Attack
 from textattack.attack_recipes import TextBuggerLi2018
+from textattack.attack_results import SkippedAttackResult
 from textattack.constraints.pre_transformation import RepeatModification, StopwordModification
 from textattack.constraints.semantics.sentence_encoders import UniversalSentenceEncoder
-from textattack.goal_function_results import GoalFunctionResultStatus
+from textattack.goal_function_results import GoalFunctionResultStatus, ClassificationGoalFunctionResult
 from textattack.goal_functions import UntargetedClassification
 from textattack.models.wrappers import ModelWrapper
 from textattack.search_methods import GreedyWordSwapWIR, SearchMethod
+from textattack.shared import AttackedText
 from textattack.shared.validators import transformation_consists_of_word_swaps_and_deletions
 from textattack.transformations import CompositeTransformation, WordSwapRandomCharacterInsertion, \
     WordSwapRandomCharacterDeletion, WordSwapNeighboringCharacterSwap, WordSwapHomoglyphSwap, WordSwapEmbedding
+
+from llm_utils import construct_prompt, create_completion, get_probs
+from abc import ABC, abstractmethod
+
+
+@dataclass
+class ICLInput:
+    train_sentences: list[str]
+    train_labels: list[int]
+    test_sentence: str
+    params: dict
+    pertubation_sentence_index: int = -1
+    attacked_text: AttackedText = None
+
+    def construct_prompt(self) -> str:
+        assert self.attacked_text is not None
+        assert self.pertubation_sentence_index != -1
+
+        train_sentences_with_pertubation = deepcopy(self.train_sentences)
+        pertubation_sentence_index = self.pertubation_sentence_index
+        pertubation_sentence = self.attacked_text.text
+        train_sentences_with_pertubation[pertubation_sentence_index] = pertubation_sentence
+
+        prompt = construct_prompt(self.params,
+                                  train_sentences_with_pertubation,
+                                  self.train_labels,
+                                  self.test_sentence)
+
+        return prompt
+
+
+class ICLExampleSelectionStrategy(ABC):
+    @abstractmethod
+    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
+        pass
+
+
+class ICLExampleSelectionStrategyFirst(ICLExampleSelectionStrategy):
+    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
+        icl_input.attacked_text = AttackedText(icl_input.train_sentences[0])
+        icl_input.pertubation_sentence_index = 0
+        assert icl_input.attacked_text.text == icl_input.train_sentences[0]
+
+
+class ICLExampleSelectionStrategyRandom(ICLExampleSelectionStrategy):
+    def __init__(self,
+                 seed: int = 0):
+        self._rng = np.random.RandomState(seed)
+
+    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
+        example_index = self.rng.choice(np.arange(0, len(icl_input.train_sentences)), 1)[0]
+
+        icl_input.attacked_text = AttackedText(icl_input.train_sentences[example_index])
+        icl_input.pertubation_sentence_index = example_index
+        assert icl_input.attacked_text.text == icl_input.train_sentences[example_index]
+
+
+class ICLExampleSelectionStrategyGreedy(ICLExampleSelectionStrategy):
+    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
+        pass
+
+
+class ICLExampleSelector:
+    def __init__(self,
+                 strategy: ICLExampleSelectionStrategy) -> None:
+        self._strategy = strategy
+
+    @property
+    def strategy(self) -> ICLExampleSelectionStrategy:
+        return self._strategy
+
+    @strategy.setter
+    def strategy(self, strategy: ICLExampleSelectionStrategy) -> None:
+        self._strategy = strategy
+
+    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput) -> None:
+        self.strategy.select_example(icl_input)
+
+
+class ICLClassificationGoalFunctionResult(ClassificationGoalFunctionResult):
+    """Represents the result of a classification goal function."""
+
+    def __init__(
+            self,
+            icl_input: ICLInput,
+            raw_output,
+            output,
+            goal_status,
+            score,
+            num_queries,
+            ground_truth_output,
+    ):
+        self.icl_input = icl_input
+
+        super().__init__(
+            icl_input.attacked_text,
+            raw_output,
+            output,
+            goal_status,
+            score,
+            num_queries,
+            ground_truth_output
+        )
+
+    @property
+    def _processed_output(self):
+        """Takes a model output (like `1`) and returns the class labeled output
+        (like `positive`), if possible.
+
+        Also returns the associated color.
+        """
+        output_label = self.raw_output.argmax()
+        output = self.icl_input.params["label_dict"][self.output]
+        output = textattack.shared.utils.process_label_name(output)
+        color = textattack.shared.utils.color_from_output(output, output_label)
+        return output, color
 
 
 class ICLAttack(TextBuggerLi2018):
@@ -65,26 +188,35 @@ class ICLAttack(TextBuggerLi2018):
         # strength of the generated adversarial text."
         constraints.append(UniversalSentenceEncoder(threshold=0.8))
         #
-        # Goal is untargeted classification
+        # Goal is ICL untargeted classification
         #
-        goal_function = ICLUntargetedClassification(model_wrapper)
+        goal_function = ICLUntargetedClassification(model_wrapper, use_cache=False)
         #
-        # Greedily swap words with "Word Importance Ranking".
+        # ICL Greedily swap words with "Word Importance Ranking".
         #
-        search_method = GreedyWordSwapWIR(wir_method="delete")
+        search_method = ICLGreedyWordSwapWIR()
 
-        return Attack(goal_function, constraints, transformation, search_method)
+        return ICLAttack(goal_function, constraints, transformation, search_method)
 
-    def _attack(self, initial_result):
-        pass
-
-    def attack(self, example, ground_truth_output):
+    def attack(self, icl_input: ICLInput, ground_truth_output, example_selection_strategy=None):
         assert isinstance(
             ground_truth_output, (int, str)
         ), "`ground_truth_output` must either be `str` or `int`."
 
+        # default strategy, use the first icl example for the attack
+        if example_selection_strategy is not None:
+            pass
+        else:
+            icl_example_selection_strategy_first = ICLExampleSelectionStrategyFirst()
+            icl_example_selector = ICLExampleSelector(icl_example_selection_strategy_first)
+            icl_example_selector.select_example_and_update_metadata_inplace(icl_input)
+
+        # icl_input.attacked_text = AttackedText(icl_input.train_sentences[0])
+        # icl_input.pertubation_sentence_index = 0
+        # assert icl_input.attacked_text.text == icl_input.train_sentences[0]
+
         goal_function_result, _ = self.goal_function.init_attack_example(
-            example, ground_truth_output
+            icl_input, ground_truth_output
         )
         if goal_function_result.goal_status == GoalFunctionResultStatus.SKIPPED:
             return SkippedAttackResult(goal_function_result)
@@ -94,34 +226,127 @@ class ICLAttack(TextBuggerLi2018):
 
 
 class ICLUntargetedClassification(UntargetedClassification):
-    pass
+    def init_attack_example(self, icl_input, ground_truth_output):
+        """Called before attacking ``attacked_text`` to 'reset' the goal
+        function and set properties for this example."""
+        self.initial_attacked_text = icl_input
+        self.ground_truth_output = ground_truth_output
+        self.num_queries = 0
+        result, _ = self.get_result(icl_input, check_skip=True)
+        return result, _
+
+    def get_results(self, icl_input_list: list[ICLInput], check_skip=False):
+        """For each attacked_text object in attacked_text_list, returns a
+        result consisting of whether or not the goal has been achieved, the
+        output for display purposes, and a score.
+
+        Additionally returns whether the search is over due to the query
+        budget.
+        """
+        results = []
+        if self.query_budget < float("inf"):
+            queries_left = self.query_budget - self.num_queries
+            icl_input_list = icl_input_list[:queries_left]
+        self.num_queries += len(icl_input_list)
+        model_outputs = self._call_model(icl_input_list)
+        for icl_input, raw_output in zip(icl_input_list, model_outputs):
+            displayed_output = self._get_displayed_output(raw_output)
+            goal_status = self._get_goal_status(
+                raw_output, icl_input, check_skip=check_skip
+            )
+            goal_function_score = self._get_score(raw_output, icl_input) # TODO check 1-score
+            results.append(
+                self._goal_function_result_type()(
+                    icl_input,
+                    raw_output,
+                    displayed_output,
+                    goal_status,
+                    goal_function_score,
+                    self.num_queries,
+                    self.ground_truth_output,
+                )
+            )
+        return results, self.num_queries == self.query_budget
+
+    def _call_model_uncached(self, attacked_text_list: list[ICLInput]) -> np.ndarray:
+        """Queries model and returns outputs for a list of AttackedText
+        objects."""
+        if not len(attacked_text_list):
+            return []
+
+        # inputs = [at.tokenizer_input for at in attacked_text_list]
+        inputs = attacked_text_list
+        outputs = []
+        i = 0
+        while i < len(inputs):
+            batch = inputs[i : i + self.batch_size]
+            batch_preds = self.model(batch)
+
+            # Some seq-to-seq models will return a single string as a prediction
+            # for a single-string list. Wrap these in a list.
+            if isinstance(batch_preds, str):
+                batch_preds = [batch_preds]
+
+            # Get PyTorch tensors off of other devices.
+            if isinstance(batch_preds, torch.Tensor):
+                batch_preds = batch_preds.cpu()
+
+            if isinstance(batch_preds, list):
+                outputs.extend(batch_preds)
+            elif isinstance(batch_preds, np.ndarray):
+                outputs.append(torch.tensor(batch_preds))
+            else:
+                outputs.append(batch_preds)
+            i += self.batch_size
+
+        if isinstance(outputs[0], torch.Tensor):
+            outputs = torch.cat(outputs, dim=0)
+
+        assert len(inputs) == len(
+            outputs
+        ), f"Got {len(outputs)} outputs for {len(inputs)} inputs"
+
+        return self._process_model_outputs(attacked_text_list, outputs)
+
+    def _goal_function_result_type(self):
+        """Returns the class of this goal function's results."""
+        return ICLClassificationGoalFunctionResult
+
 
 
 class ICLGreedyWordSwapWIR(SearchMethod):
-    def _get_index_order(self, initial_text):
+    def _get_index_order(self, initial_icl_input: ICLInput):
         """Returns word indices of ``initial_text`` in descending order of
         importance."""
 
+        initial_text = initial_icl_input.attacked_text
         len_text, indices_to_order = self.get_indices_to_order(initial_text)
 
         leave_one_texts = [
             initial_text.delete_word_at_index(i) for i in indices_to_order
         ]
-        leave_one_results, search_over = self.get_goal_results(leave_one_texts)
+        leave_one_icl_inputs = [ICLInput(initial_icl_input.train_sentences,
+                                         initial_icl_input.train_labels,
+                                         initial_icl_input.test_sentence,
+                                         initial_icl_input.params,
+                                         initial_icl_input.pertubation_sentence_index,
+                                         leave_one_text) for leave_one_text in leave_one_texts]
+
+        leave_one_results, search_over = self.get_goal_results(leave_one_icl_inputs)
         index_scores = np.array([result.score for result in leave_one_results])
 
         index_order = np.array(indices_to_order)[(-index_scores).argsort()]
 
         return index_order, search_over
 
-    def perform_search(self, initial_result):
-        attacked_text = initial_result.attacked_text
+    def perform_search(self, initial_result: ICLClassificationGoalFunctionResult): # TODO check skip for cases of incorrect intiial labeling
+        icl_input = initial_result.icl_input
 
         # Sort words by order of importance
-        index_order, search_over = self._get_index_order(attacked_text)
+        index_order, search_over = self._get_index_order(icl_input)
         i = 0
-        cur_result = initial_result
-        results = None
+        cur_result = deepcopy(initial_result)
+        # results = None
         while i < len(index_order) and not search_over:
             transformed_text_candidates = self.get_transformations(
                 cur_result.attacked_text,
@@ -131,7 +356,16 @@ class ICLGreedyWordSwapWIR(SearchMethod):
             i += 1
             if len(transformed_text_candidates) == 0:
                 continue
-            results, search_over = self.get_goal_results(transformed_text_candidates)
+
+            transformed_icl_candidates = [ICLInput(icl_input.train_sentences,
+                                                   icl_input.train_labels,
+                                                   icl_input.test_sentence,
+                                                   icl_input.params,
+                                                   icl_input.pertubation_sentence_index,
+                                                   transformed_text_candidate) for transformed_text_candidate in
+                                          transformed_text_candidates]
+
+            results, search_over = self.get_goal_results(transformed_icl_candidates)
             results = sorted(results, key=lambda x: -x.score)
             # Skip swaps which don't improve the score
             if results[0].score > cur_result.score:
@@ -146,7 +380,7 @@ class ICLGreedyWordSwapWIR(SearchMethod):
                 for result in results:
                     if result.goal_status != GoalFunctionResultStatus.SUCCEEDED:
                         break
-                    candidate = result.attacked_text
+                    candidate = result.icl_input.attacked_text
                     try:
                         similarity_score = candidate.attack_attrs["similarity_score"]
                     except KeyError:
@@ -173,27 +407,51 @@ class ICLGreedyWordSwapWIR(SearchMethod):
 
 
 class ICLModelWrapper(ModelWrapper):
-    def __init__(self, model):
+    def __init__(self, model, device: str = 'cpu'):
         self.model = model
+        self.device = device
 
-    def __call__(self, text_input_list):
-        pass
-      # x_transform = []
-      # for i, review in enumerate(text_input_list):
-      #   tokens = [x.strip(",") for x in review.split()]
-      #   BoW_array = np.zeros((NUM_WORDS,))
-      #   for word in tokens:
-      #     if word in vocabulary:
-      #       if vocabulary[word] < len(BoW_array):
-      #         BoW_array[vocabulary[word]] += 1
-      #   x_transform.append(BoW_array)
-      # x_transform = np.array(x_transform)
-      # prediction = self.model.predict(x_transform)
-      #
-      # return prediction
+    def __call__(self, icl_input_list: list[ICLInput]):
+        outputs_probs = []
+
+        for icl_input in icl_input_list:
+            params = icl_input.params
+            num_classes = len(params['label_dict'].keys())
+
+            prompt = icl_input.construct_prompt()
+            llm_response = create_completion(prompt,
+                                             params['num_tokens_to_predict'],
+                                             params['model'],
+                                             num_logprobs=params['api_num_logprob'],
+                                             device=self.device)
+            llm_response = llm_response['choices'][0]
+            label_probs = get_probs(params, num_classes, llm_response)
+            outputs_probs.append(label_probs)
+
+        outputs_probs = np.array(outputs_probs)  # probs are normalized
+
+        return outputs_probs
 
 
-def textbugger_attack_setup(llm):
-    model_wrapper = ICLModelWrapper(llm)
+def icl_attack_setup(params,
+                     llm,
+                     train_sentences,
+                     train_labels,
+                     test_sentence,
+                     test_label,
+                     device: str = "cpu"):
+    model_wrapper = ICLModelWrapper(llm, device)
 
-    attack = TextBuggerLi2018.build(model_wrapper)
+    attack = ICLAttack.build(model_wrapper)
+
+    # train_sentences = [
+    #     'This movie is great!',
+    #     'I did not enjoy this film.',
+    #     'The acting was superb.'
+    # ]
+    # train_labels = [1, 0, 1]
+    # test_sentence = 'The plot was confusing.'
+    # test_label = 0
+
+    icl_input = ICLInput(train_sentences, train_labels, test_sentence, params)
+    attack.attack(icl_input, test_label)
