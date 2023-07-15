@@ -2,8 +2,13 @@ import argparse
 from copy import deepcopy
 
 import numpy as np
+import textattack
+import torch
 
+from attack_dataset import ICLDataset
+from attack_utils import ICLModelWrapper, ICLAttack
 from data_utils import load_dataset
+from llm_setups import setup_llama
 from llm_utils import create_completion, get_model_response
 from utils import load_results, random_sampling, save_experiment_data_pickle
 
@@ -54,13 +59,15 @@ def run_experiments(params_list):
     Run the experiments and save its responses and the rest of configs into a pickle file
     """
 
-    result_tree = dict()
+    # result_tree = dict()
     for param_index, params in enumerate(params_list):
         print("\nExperiment name:", params['expr_name'])
 
+        # sanity check
+        experiment_sanity_check(params)
+
         # load data
         all_train_sentences, all_train_labels, all_test_sentences, all_test_labels = load_dataset(params)
-        experiment_sanity_check(params)
 
         # sample test set
         if params['subsample_test_set'] is None:
@@ -73,10 +80,30 @@ def run_experiments(params_list):
                                                           all_test_labels,
                                                           params['subsample_test_set'])
 
+        # set seed
         np.random.seed(params['seed'])
-        for test_sentence in test_sentences:
-            # sample few-shot training examples
-            train_sentences, train_labels = random_sampling(all_train_sentences, all_train_labels, params['num_shots'])
+
+        device = "cpu" if not torch.cuda.is_available() else "cuda"
+        llm = setup_llama(device)
+
+        icl_model_wrapper = ICLModelWrapper(llm, device)
+        attack = ICLAttack.build(icl_model_wrapper)
+
+        attack_dataset = ICLDataset(test_sentences, test_labels, all_train_sentences, all_train_labels,
+                                    params['num_shots'], params)
+
+        attack_args = textattack.AttackArgs(
+            log_to_csv="log.csv",
+            checkpoint_interval=5,
+            checkpoint_dir="checkpoints",
+            disable_stdout=True
+        )
+        attacker = textattack.Attacker(attack, attack_dataset, attack_args)
+        attacker.attack_dataset()
+
+        #for test_sentence in test_sentences:
+            # # sample few-shot training examples
+            # train_sentences, train_labels = random_sampling(all_train_sentences, all_train_labels, params['num_shots'])
 
             # choose important example based on their importance score
 
@@ -85,7 +112,7 @@ def run_experiments(params_list):
             # loop until success - generate bug then evaluate
 
             # obtaining model's response
-            raw_resp_test = get_model_response(params, train_sentences, train_labels, list(test_sentence))
+            #raw_resp_test = get_model_response(params, train_sentences, train_labels, list(test_sentence))
 
             # get prob for each label
             # TODO
@@ -119,9 +146,9 @@ def run_experiments(params_list):
         # save_experiment_data_pickle(params, result_to_save)
 
 
-def eval_accuracy(all_label_probs, test_labels):
-    raise NotImplementedError
-
+# def eval_accuracy(all_label_probs, test_labels):
+#     raise NotImplementedError
+#
 
 def experiment_sanity_check(params):
     """Sanity check the experiment"""
