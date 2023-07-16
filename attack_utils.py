@@ -203,24 +203,20 @@ class ICLAttack(TextBuggerLi2018):
             ground_truth_output, (int, str)
         ), "`ground_truth_output` must either be `str` or `int`."
 
-        # default strategy, use the first icl example for the attack
-        if example_selection_strategy is not None:
-            pass
-        else:
-            icl_example_selection_strategy_first = ICLExampleSelectionStrategyFirst()
-            icl_example_selector = ICLExampleSelector(icl_example_selection_strategy_first)
-            icl_example_selector.select_example_and_update_metadata_inplace(icl_input)
-
-        # icl_input.attacked_text = AttackedText(icl_input.train_sentences[0])
-        # icl_input.pertubation_sentence_index = 0
-        # assert icl_input.attacked_text.text == icl_input.train_sentences[0]
-
         goal_function_result, _ = self.goal_function.init_attack_example(
             icl_input, ground_truth_output
         )
         if goal_function_result.goal_status == GoalFunctionResultStatus.SKIPPED:
             return SkippedAttackResult(goal_function_result)
         else:
+            # default strategy, choose random icl example for the attack
+            if example_selection_strategy is not None:
+                pass
+            else:
+                icl_example_selection_strategy_first = ICLExampleSelectionStrategyFirst()
+                icl_example_selector = ICLExampleSelector(icl_example_selection_strategy_first)
+                icl_example_selector.select_example_and_update_metadata_inplace(icl_input)
+
             result = self._attack(goal_function_result)
             return result
 

@@ -55,7 +55,7 @@ def main(models: list[str],
 
 def run_experiments(params_list):
     """
-    Run the experiments and save its responses and the rest of configs into a pickle file
+    Run the experiments and save its responses and the rest of configs
     """
 
     device = "cpu" if not torch.cuda.is_available() else "cuda"
