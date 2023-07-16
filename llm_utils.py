@@ -46,15 +46,6 @@ def create_completion_llama(prompt: str,
                    temperature=temperature, echo=echo)
 
     return response
-    # print("response:")
-    # print(response)
-    # print()
-    #
-    # print("text:")
-    # print(response['choices'][0]['text'].strip())
-    # print()
-    # print("logprob:")
-    # print(response['choices'][0]['logprobs']['token_logprobs'][0])
 
 
 def create_completion_gpt3(prompt: str,
@@ -84,14 +75,16 @@ def create_completion(prompt: str,
                       stop: str = "\n",
                       echo: bool = False,
                       n: int = None,
-                      device: str = "cpu") -> dict:
+                      device: str = "cpu",
+                      llm: Llama = None) -> dict:
     """Complete the prompt using a language model"""
 
     assert max_tokens >= 0
     assert temperature >= 0.0
 
     if 'llama' in model_name:
-        return create_completion_llama(prompt, max_tokens, temperature, num_logprobs, stop, echo, device=device)
+        return create_completion_llama(prompt, max_tokens, temperature, num_logprobs, stop, echo,
+                                       device=device, llm=llm)
 
     elif 'gpt3' in model_name:
         return create_completion_gpt3(prompt, max_tokens, temperature, num_logprobs, stop, echo, n)

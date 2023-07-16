@@ -22,6 +22,7 @@ class ICLDataset(Dataset):
         self._all_train_labels = all_train_labels
         self._num_shots = num_shots
         self._params = deepcopy(params)
+        self.shuffled = False
 
     def __getitem__(self, i):
         test_sentence = deepcopy(self._test_sentences[i])

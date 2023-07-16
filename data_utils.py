@@ -83,10 +83,10 @@ def load_sms_spam():
     encoder.fit_transform(df['target'])
     df['target'] = encoder.fit_transform(df['target'])
 
-    X = df['test'].values
+    X = df['text'].values
     y = df['target'].values
 
-    train_sentences, test_sentences, train_labels, test_labels = train_test_split(X, y, test_size=0.2, random_state=2)
+    train_sentences, test_sentences, train_labels, test_labels = train_test_split(X, y, test_size=0.3, random_state=2)
 
     return train_sentences.tolist(), train_labels.tolist(), test_sentences.tolist(), test_labels.tolist()
 

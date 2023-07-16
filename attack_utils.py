@@ -129,7 +129,7 @@ class ICLClassificationGoalFunctionResult(ClassificationGoalFunctionResult):
         Also returns the associated color.
         """
         output_label = self.raw_output.argmax()
-        output = self.icl_input.params["label_dict"][self.output]
+        output = self.icl_input.params["label_dict"][self.output][0]
         output = textattack.shared.utils.process_label_name(output)
         color = textattack.shared.utils.color_from_output(output, output_label)
         return output, color
@@ -423,7 +423,8 @@ class ICLModelWrapper(ModelWrapper):
                                              params['num_tokens_to_predict'],
                                              params['model'],
                                              num_logprobs=params['api_num_logprob'],
-                                             device=self.device)
+                                             device=self.device,
+                                             llm=self.model)
             llm_response = llm_response['choices'][0]
             label_probs = get_probs(params, num_classes, llm_response)
             outputs_probs.append(label_probs)
