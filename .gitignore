@@ -1,2 +1,5 @@
 models
 text-attack
+data
+__pycache__/
+.vscode
