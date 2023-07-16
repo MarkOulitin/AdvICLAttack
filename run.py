@@ -62,7 +62,8 @@ def run_experiments(params_list):
     print(f"device={device}")
 
     for param_index, params in enumerate(params_list):
-        print("\nExperiment name:", params['expr_name'])
+        experiment_name = params['expr_name']
+        print("\nExperiment name:", experiment_name)
 
         # load data
         all_train_sentences, all_train_labels, all_test_sentences, all_test_labels = load_dataset(params)
@@ -94,10 +95,12 @@ def run_experiments(params_list):
 
         attack_args = textattack.AttackArgs(
             num_examples=len(attack_dataset),
-            log_to_csv="log.csv",
+            log_to_txt=f"log_{experiment_name}.txt",
+            log_to_csv=f"log_{experiment_name}.csv",
             checkpoint_interval=5,
             checkpoint_dir="checkpoints",
-            disable_stdout=True
+            disable_stdout=True,
+            query_budget=30,  # TODO remove
         )
         attacker = ICLAttacker(attack, attack_dataset, attack_args)
         attacker.attack_dataset()

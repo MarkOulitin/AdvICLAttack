@@ -196,7 +196,6 @@ class ICLAttack(TextBuggerLi2018):
         # Goal is ICL untargeted classification
         #
         goal_function = ICLUntargetedClassification(model_wrapper, use_cache=False)
-        goal_function.query_budget = 30  # TODO remove
         #
         # ICL Greedily swap words with "Word Importance Ranking".
         #
