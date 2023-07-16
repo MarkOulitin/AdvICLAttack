@@ -434,25 +434,16 @@ class ICLModelWrapper(ModelWrapper):
         return outputs_probs
 
 
-def icl_attack_setup(params,
-                     llm,
-                     train_sentences,
-                     train_labels,
-                     test_sentence,
-                     test_label,
-                     device: str = "cpu"):
-    model_wrapper = ICLModelWrapper(llm, device)
-
-    attack = ICLAttack.build(model_wrapper)
-
-    # train_sentences = [
-    #     'This movie is great!',
-    #     'I did not enjoy this film.',
-    #     'The acting was superb.'
-    # ]
-    # train_labels = [1, 0, 1]
-    # test_sentence = 'The plot was confusing.'
-    # test_label = 0
-
-    icl_input = ICLInput(train_sentences, train_labels, test_sentence, params)
-    attack.attack(icl_input, test_label)
+# def icl_attack_setup(params,
+#                      llm,
+#                      train_sentences,
+#                      train_labels,
+#                      test_sentence,
+#                      test_label,
+#                      device: str = "cpu"):
+#     model_wrapper = ICLModelWrapper(llm, device)
+#
+#     attack = ICLAttack.build(model_wrapper)
+#
+#     icl_input = ICLInput(train_sentences, train_labels, test_sentence, params)
+#     attack.attack(icl_input, test_label)
