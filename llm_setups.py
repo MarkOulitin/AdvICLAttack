@@ -8,7 +8,7 @@ from tqdm import tqdm
 from utils import ROOT_DIR
 
 
-def setup_llama(device: str) -> Llama:
+def setup_llama(device: str, verbose: bool = False) -> Llama:
     model_file_name = "llama-ggml-model-q4_0.bin"
     local_path = f"./models/{model_file_name}"
 
@@ -32,9 +32,9 @@ def setup_llama(device: str) -> Llama:
         llm = Llama(model_path=local_path, logits_all=True, verbose=True)
     else:
         n_gpu_layers = 40
-        n_batch = 256
+        n_batch = 512
         llm = Llama(model_path=local_path, n_gpu_layers=n_gpu_layers, n_batch=n_batch,
-                    logits_all=True, verbose=True)
+                    logits_all=True, verbose=verbose)
 
     return llm
 
