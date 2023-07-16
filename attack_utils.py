@@ -4,7 +4,6 @@ from dataclasses import dataclass
 import numpy as np
 import textattack
 import torch
-from textattack import Attack
 from textattack.attack_recipes import TextBuggerLi2018
 from textattack.attack_results import SkippedAttackResult
 from textattack.constraints.pre_transformation import RepeatModification, StopwordModification
@@ -12,7 +11,7 @@ from textattack.constraints.semantics.sentence_encoders import UniversalSentence
 from textattack.goal_function_results import GoalFunctionResultStatus, ClassificationGoalFunctionResult
 from textattack.goal_functions import UntargetedClassification
 from textattack.models.wrappers import ModelWrapper
-from textattack.search_methods import GreedyWordSwapWIR, SearchMethod
+from textattack.search_methods import SearchMethod
 from textattack.shared import AttackedText
 from textattack.shared.validators import transformation_consists_of_word_swaps_and_deletions
 from textattack.transformations import CompositeTransformation, WordSwapRandomCharacterInsertion, \
@@ -24,25 +23,25 @@ from abc import ABC, abstractmethod
 
 @dataclass
 class ICLInput:
-    train_sentences: list[str]
-    train_labels: list[int]
+    example_sentences: list[str]
+    example_labels: list[int]
     test_sentence: str
     params: dict
-    pertubation_sentence_index: int = -1
+    pertubation_example_sentence_index: int = -1
     attacked_text: AttackedText = None
 
     def construct_prompt(self) -> str:
         assert self.attacked_text is not None
-        assert self.pertubation_sentence_index != -1
+        assert self.pertubation_example_sentence_index != -1
 
-        train_sentences_with_pertubation = deepcopy(self.train_sentences)
-        pertubation_sentence_index = self.pertubation_sentence_index
+        train_sentences_with_pertubation = deepcopy(self.example_sentences)
+        pertubation_sentence_index = self.pertubation_example_sentence_index
         pertubation_sentence = self.attacked_text.text
         train_sentences_with_pertubation[pertubation_sentence_index] = pertubation_sentence
 
         prompt = construct_prompt(self.params,
                                   train_sentences_with_pertubation,
-                                  self.train_labels,
+                                  self.example_labels,
                                   self.test_sentence)
 
         return prompt
@@ -56,9 +55,9 @@ class ICLExampleSelectionStrategy(ABC):
 
 class ICLExampleSelectionStrategyFirst(ICLExampleSelectionStrategy):
     def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
-        icl_input.attacked_text = AttackedText(icl_input.train_sentences[0])
-        icl_input.pertubation_sentence_index = 0
-        assert icl_input.attacked_text.text == icl_input.train_sentences[0]
+        icl_input.attacked_text = AttackedText(icl_input.example_sentences[0])
+        icl_input.pertubation_example_sentence_index = 0
+        assert icl_input.attacked_text.text == icl_input.example_sentences[0]
 
 
 class ICLExampleSelectionStrategyRandom(ICLExampleSelectionStrategy):
@@ -67,11 +66,11 @@ class ICLExampleSelectionStrategyRandom(ICLExampleSelectionStrategy):
         self._rng = np.random.RandomState(seed)
 
     def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
-        example_index = self.rng.choice(np.arange(0, len(icl_input.train_sentences)), 1)[0]
+        example_index = self.rng.choice(np.arange(0, len(icl_input.example_sentences)), 1)[0]
 
-        icl_input.attacked_text = AttackedText(icl_input.train_sentences[example_index])
-        icl_input.pertubation_sentence_index = example_index
-        assert icl_input.attacked_text.text == icl_input.train_sentences[example_index]
+        icl_input.attacked_text = AttackedText(icl_input.example_sentences[example_index])
+        icl_input.pertubation_example_sentence_index = example_index
+        assert icl_input.attacked_text.text == icl_input.example_sentences[example_index]
 
 
 class ICLExampleSelectionStrategyGreedy(ICLExampleSelectionStrategy):
@@ -309,7 +308,6 @@ class ICLUntargetedClassification(UntargetedClassification):
         return ICLClassificationGoalFunctionResult
 
 
-
 class ICLGreedyWordSwapWIR(SearchMethod):
     def _get_index_order(self, initial_icl_input: ICLInput):
         """Returns word indices of ``initial_text`` in descending order of
@@ -321,11 +319,11 @@ class ICLGreedyWordSwapWIR(SearchMethod):
         leave_one_texts = [
             initial_text.delete_word_at_index(i) for i in indices_to_order
         ]
-        leave_one_icl_inputs = [ICLInput(initial_icl_input.train_sentences,
-                                         initial_icl_input.train_labels,
+        leave_one_icl_inputs = [ICLInput(initial_icl_input.example_sentences,
+                                         initial_icl_input.example_labels,
                                          initial_icl_input.test_sentence,
                                          initial_icl_input.params,
-                                         initial_icl_input.pertubation_sentence_index,
+                                         initial_icl_input.pertubation_example_sentence_index,
                                          leave_one_text) for leave_one_text in leave_one_texts]
 
         leave_one_results, search_over = self.get_goal_results(leave_one_icl_inputs)
@@ -353,11 +351,11 @@ class ICLGreedyWordSwapWIR(SearchMethod):
             if len(transformed_text_candidates) == 0:
                 continue
 
-            transformed_icl_candidates = [ICLInput(icl_input.train_sentences,
-                                                   icl_input.train_labels,
+            transformed_icl_candidates = [ICLInput(icl_input.example_sentences,
+                                                   icl_input.example_labels,
                                                    icl_input.test_sentence,
                                                    icl_input.params,
-                                                   icl_input.pertubation_sentence_index,
+                                                   icl_input.pertubation_example_sentence_index,
                                                    transformed_text_candidate) for transformed_text_candidate in
                                           transformed_text_candidates]
 
@@ -428,18 +426,3 @@ class ICLModelWrapper(ModelWrapper):
         outputs_probs = np.array(outputs_probs)  # probs are normalized
 
         return outputs_probs
-
-
-# def icl_attack_setup(params,
-#                      llm,
-#                      train_sentences,
-#                      train_labels,
-#                      test_sentence,
-#                      test_label,
-#                      device: str = "cpu"):
-#     model_wrapper = ICLModelWrapper(llm, device)
-#
-#     attack = ICLAttack.build(model_wrapper)
-#
-#     icl_input = ICLInput(train_sentences, train_labels, test_sentence, params)
-#     attack.attack(icl_input, test_label)
