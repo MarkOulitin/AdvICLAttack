@@ -58,7 +58,9 @@ def run_experiments(params_list):
     Run the experiments and save its responses and the rest of configs into a pickle file
     """
 
-    # result_tree = dict()
+    device = "cpu" if not torch.cuda.is_available() else "cuda"
+    print(f"device={device}")
+
     for param_index, params in enumerate(params_list):
         print("\nExperiment name:", params['expr_name'])
 
@@ -66,7 +68,7 @@ def run_experiments(params_list):
         all_train_sentences, all_train_labels, all_test_sentences, all_test_labels = load_dataset(params)
 
         # sanity check
-        experiment_sanity_check(params)
+        experiment_sanity_check(params, device)
 
         # sample test set
         if params['subsample_test_set'] is None:
@@ -81,9 +83,6 @@ def run_experiments(params_list):
 
         # set seed
         np.random.seed(params['seed'])
-
-        device = "cpu" if not torch.cuda.is_available() else "cuda"
-        print(f"device={device}")
 
         llm = setup_llama(device)
 
