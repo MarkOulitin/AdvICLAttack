@@ -30,6 +30,12 @@ class ICLInput:
     pertubation_example_sentence_index: int = -1
     attacked_text: AttackedText = None
 
+    def __post_init__(self):
+        # default init of the first example
+        icl_example_selection_strategy_first = ICLExampleSelectionStrategyFirst()
+        icl_example_selector = ICLExampleSelector(icl_example_selection_strategy_first)
+        icl_example_selector.select_example_and_update_metadata_inplace(self)
+
     def construct_prompt(self) -> str:
         assert self.attacked_text is not None
         assert self.pertubation_example_sentence_index != -1
@@ -190,6 +196,7 @@ class ICLAttack(TextBuggerLi2018):
         # Goal is ICL untargeted classification
         #
         goal_function = ICLUntargetedClassification(model_wrapper, use_cache=False)
+        goal_function.query_budget = 30  # TODO remove
         #
         # ICL Greedily swap words with "Word Importance Ranking".
         #
@@ -340,7 +347,7 @@ class ICLGreedyWordSwapWIR(SearchMethod):
         index_order, search_over = self._get_index_order(icl_input)
         i = 0
         cur_result = deepcopy(initial_result)
-        # results = None
+
         while i < len(index_order) and not search_over:
             transformed_text_candidates = self.get_transformations(
                 cur_result.attacked_text,

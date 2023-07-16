@@ -29,7 +29,7 @@ def setup_llama(device: str, verbose: bool = False) -> Llama:
         print(f"Model file already exists at {local_path}. Skipping download.")
 
     if device == 'cpu':
-        llm = Llama(model_path=local_path, logits_all=True, verbose=True)
+        llm = Llama(model_path=local_path, logits_all=True, verbose=verbose)
     else:
         n_gpu_layers = 40
         n_batch = 512
