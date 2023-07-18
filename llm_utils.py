@@ -94,7 +94,10 @@ def create_completion_llama_hf(prompt: str,
     probs = np.array(probs)
     probs = probs / np.sum(probs)  # normalize to 1
 
-    assert probs.sum() == 1
+    # Check if the sum of probabilities is close to 1.0
+    tolerance = 1e-6
+    is_close_to_one = np.isclose(probs.sum(), 1.0, rtol=tolerance)
+    assert is_close_to_one
 
     # print(sequence_decoded)
     # print(probs)

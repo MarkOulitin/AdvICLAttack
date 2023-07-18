@@ -97,10 +97,10 @@ def run_experiments(params_list):
 
         attack_args = textattack.AttackArgs(
             num_examples=len(attack_dataset),
-            log_to_txt=f"log_{experiment_name}.txt",
-            log_to_csv=f"log_{experiment_name}.csv",
+            log_to_txt=f"./log_{experiment_name}.txt",
+            log_to_csv=f"./log_{experiment_name}.csv",
             checkpoint_interval=5,
-            checkpoint_dir="checkpoints",
+            checkpoint_dir="./checkpoints",
             disable_stdout=True,
             # query_budget=60,  # TODO remove
         )
