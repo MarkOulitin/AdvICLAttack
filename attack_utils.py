@@ -17,7 +17,7 @@ from textattack.shared.validators import transformation_consists_of_word_swaps_a
 from textattack.transformations import CompositeTransformation, WordSwapRandomCharacterInsertion, \
     WordSwapRandomCharacterDeletion, WordSwapNeighboringCharacterSwap, WordSwapHomoglyphSwap, WordSwapEmbedding
 
-from llm_utils import construct_prompt, create_completion, get_probs
+from llm_utils import construct_prompt, create_completion
 from abc import ABC, abstractmethod
 
 
@@ -407,8 +407,8 @@ class ICLGreedyWordSwapWIR(SearchMethod):
 
 
 class ICLModelWrapper(ModelWrapper):
-    def __init__(self, model, device: str = 'cpu'):
-        self.model = model
+    def __init__(self, llm_model, device):
+        self.model = llm_model
         self.device = device
 
     def __call__(self, icl_input_list: list[ICLInput]):
@@ -416,17 +416,18 @@ class ICLModelWrapper(ModelWrapper):
 
         for icl_input in icl_input_list:
             params = icl_input.params
-            num_classes = len(params['label_dict'].keys())
+            # num_classes = len(params['label_dict'].keys())
 
             prompt = icl_input.construct_prompt()
-            llm_response = create_completion(prompt,
-                                             params['num_tokens_to_predict'],
-                                             params['model'],
-                                             num_logprobs=params['api_num_logprob'],
-                                             device=self.device,
-                                             llm=self.model)
-            llm_response = llm_response['choices'][0]
-            label_probs = get_probs(params, num_classes, llm_response)
+            llm_response, label_probs = create_completion(prompt,
+                                                          params['inv_label_dict'],
+                                                          params['num_tokens_to_predict'],
+                                                          params['model'],
+                                                          self.device,
+                                                          self.model,
+                                                          num_logprobs=params['api_num_logprob'])
+            # llm_response = llm_response['choices'][0]  # llama cpp logic
+            # label_probs = get_probs(params, num_classes, llm_response)
             outputs_probs.append(label_probs)
 
         outputs_probs = np.array(outputs_probs)  # probs are normalized

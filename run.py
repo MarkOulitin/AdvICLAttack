@@ -9,7 +9,7 @@ from attack_dataset import ICLDataset
 from attack_utils import ICLModelWrapper, ICLAttack
 from data_utils import load_dataset
 from icl_attaker import ICLAttacker
-from llm_setups import setup_llama
+from llm_setups import setup_llama_hf
 from llm_utils import create_completion
 from utils import load_results, random_sampling
 
@@ -60,6 +60,7 @@ def run_experiments(params_list):
 
     device = "cpu" if not torch.cuda.is_available() else "cuda"
     print(f"device={device}")
+    print(f"# of gpus={torch.cuda.device_count()}")
 
     for param_index, params in enumerate(params_list):
         experiment_name = params['expr_name']
@@ -68,8 +69,14 @@ def run_experiments(params_list):
         # load data
         all_train_sentences, all_train_labels, all_test_sentences, all_test_labels = load_dataset(params)
 
+        # llm setup
+        llm = setup_llama_hf(device, params['inv_label_dict'])
+
         # sanity check
-        experiment_sanity_check(params, device)
+        experiment_sanity_check(params, device, llm)
+
+        # set seed
+        np.random.seed(params['seed'])
 
         # sample test set
         if params['subsample_test_set'] is None:
@@ -81,11 +88,6 @@ def run_experiments(params_list):
             test_sentences, test_labels = random_sampling(all_test_sentences,
                                                           all_test_labels,
                                                           params['subsample_test_set'])
-
-        # set seed
-        np.random.seed(params['seed'])
-
-        llm = setup_llama(device)
 
         icl_model_wrapper = ICLModelWrapper(llm, device)
         attack = ICLAttack.build(icl_model_wrapper)
@@ -100,29 +102,43 @@ def run_experiments(params_list):
             checkpoint_interval=5,
             checkpoint_dir="checkpoints",
             disable_stdout=True,
-            query_budget=30,  # TODO remove
+            # query_budget=60,  # TODO remove
         )
         attacker = ICLAttacker(attack, attack_dataset, attack_args)
         attacker.attack_dataset()
 
 
-def experiment_sanity_check(params: dict, device: str):
+def experiment_sanity_check(params: dict, device: str, llm):
     """Sanity check the experiment"""
 
     assert params['num_tokens_to_predict'] == 1
 
-    llm = setup_llama(device)
+    model_name = params['model']
 
     # for classification, make sure that all of the class names are one word.
     for key, label_names in params['label_dict'].items():
         for label_id, label_name in enumerate(label_names):
             prompt = label_name
-            response = create_completion(prompt, 1, params['model'], echo=True, num_logprobs=1,
-                                         device=device, llm=llm)  # set echo to True
-            first_token_of_label_name = response['choices'][0]['logprobs']['tokens'][0][1:]  # without the prefix space
-            if first_token_of_label_name != label_name:
-                print('label name is more than 1 token', label_name)
-                assert False
+
+            if model_name == 'llama_cpp':
+                response = create_completion(prompt, params['inv_label_dict'], 1,
+                                             model_name, device, llm, echo=True, num_logprobs=1)  # set echo to True
+                first_token_of_label_name = response['choices'][0]['logprobs']['tokens'][0][1:]  # without the prefix space
+
+                if first_token_of_label_name != label_name:
+                    print('label name is more than 1 token', label_name)
+                    assert False
+
+            elif model_name == 'llama_hf':
+                label_to_token = llm.label_to_token
+                assert label_name in label_to_token
+                # response, probs = create_completion(prompt, params['inv_label_dict'], 1,
+                #                                     model_name, device, echo=True, num_logprobs=1,
+                #                                     llm=llm)  # set echo to True
+                # first_token_of_label_name = response[2]  # take the third token, first tokens are "<s> "
+
+            else:
+                raise NotImplementedError
 
 
 if __name__ == '__main__':
