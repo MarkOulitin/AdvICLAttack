@@ -31,22 +31,23 @@ class ICLInput:
     attacked_text: AttackedText = None
 
     def __post_init__(self):
-        # default init of the first example
-        icl_example_selection_strategy_first = ICLExampleSelectionStrategyFirst()
-        icl_example_selector = ICLExampleSelector(icl_example_selection_strategy_first)
-        icl_example_selector.select_example_and_update_metadata_inplace(self)
+        if self.attacked_text is None:
+            # default init of the first example
+            icl_example_selection_strategy_first = ICLExampleSelectionStrategyFirst()
+            icl_example_selector = ICLExampleSelector(icl_example_selection_strategy_first)
+            icl_example_selector.select_example_and_update_metadata_inplace(self)
 
     def construct_prompt(self) -> str:
         assert self.attacked_text is not None
         assert self.pertubation_example_sentence_index != -1
 
-        train_sentences_with_pertubation = deepcopy(self.example_sentences)
+        example_sentences_with_pertubation = deepcopy(self.example_sentences)
         pertubation_sentence_index = self.pertubation_example_sentence_index
         pertubation_sentence = self.attacked_text.text
-        train_sentences_with_pertubation[pertubation_sentence_index] = pertubation_sentence
+        example_sentences_with_pertubation[pertubation_sentence_index] = pertubation_sentence
 
         prompt = construct_prompt(self.params,
-                                  train_sentences_with_pertubation,
+                                  example_sentences_with_pertubation,
                                   self.example_labels,
                                   self.test_sentence)
 
