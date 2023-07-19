@@ -68,7 +68,10 @@ def run_experiments(params_list):
         print("\nExperiment name:", experiment_name)
 
         # load data
-        all_train_sentences, all_train_labels, all_test_sentences, all_test_labels = load_dataset(params)
+        example_sentences, example_labels, test_sentences, test_labels = load_dataset(params)
+        print(f"dataset {params['dataset']} stats:")
+        print(f"size of examples pool: {len(example_labels)}")
+        print(f"num of test sentences: {len(test_labels)}")
 
         # llm setup
         llm = setup_llama_hf(device, params['inv_label_dict'])
@@ -81,32 +84,55 @@ def run_experiments(params_list):
 
         # sample test set
         if params['subsample_test_set'] is None:
-            print(f"selecting full test set ({len(all_test_labels)} examples)")
-            test_sentences, test_labels = all_test_sentences, all_test_labels
+            print(f"selecting full test set ({len(test_labels)} examples)")
+            test_sentences, test_labels = test_sentences, test_labels
         else:
             print(f"selecting {params['subsample_test_set']} subsample of test set")
 
-            test_sentences, test_labels = random_sampling(all_test_sentences,
-                                                          all_test_labels,
+            test_sentences, test_labels = random_sampling(test_sentences,
+                                                          test_labels,
                                                           params['subsample_test_set'])
 
-        icl_model_wrapper = ICLModelWrapper(llm, device)
-        attack = ICLAttack.build(icl_model_wrapper)
+        attack, attack_dataset, attack_args = setup_attack_success_rate_experiment(llm,
+                                                                                   device,
+                                                                                   test_sentences,
+                                                                                   test_labels,
+                                                                                   example_sentences,
+                                                                                   example_labels,
+                                                                                   experiment_name,
+                                                                                   params)
 
-        attack_dataset = ICLDataset(test_sentences, test_labels, all_train_sentences, all_train_labels,
-                                    params['num_shots'], params)
-
-        attack_args = textattack.AttackArgs(
-            num_examples=len(attack_dataset),
-            log_to_txt=f"./log_{experiment_name}.txt",
-            log_to_csv=f"./log_{experiment_name}.csv",
-            checkpoint_interval=5,
-            checkpoint_dir="./checkpoints",
-            disable_stdout=True,
-            # query_budget=60,  # TODO remove
-        )
-        attacker = ICLAttacker(attack, attack_dataset, attack_args)
+        attacker = ICLAttacker(experiment_name, attack, attack_dataset, attack_args)
         attacker.attack_dataset()
+
+
+def setup_attack_success_rate_experiment(llm,
+                                         device,
+                                         test_sentences,
+                                         test_labels,
+                                         example_sentences,
+                                         example_labels,
+                                         experiment_name,
+                                         params):
+    icl_model_wrapper = ICLModelWrapper(llm, device)
+    attack = ICLAttack.build(icl_model_wrapper)
+
+    attack_dataset = ICLDataset(test_sentences, test_labels, example_sentences, example_labels,
+                                params['num_shots'], params)
+
+    attack_args = textattack.AttackArgs(
+        num_examples=len(attack_dataset),
+        log_to_txt=f"./log_{experiment_name}.txt",
+        log_to_csv=f"./log_{experiment_name}.csv",
+        log_summary_to_json=f"./attack_summary_log_{experiment_name}.json",
+        csv_coloring_style="plain",
+        checkpoint_interval=5,
+        checkpoint_dir="./checkpoints",
+        disable_stdout=True,
+        # query_budget=60,  # TODO remove
+    )
+
+    return attack, attack_dataset, attack_args
 
 
 def experiment_sanity_check(params: dict, device: str, llm):

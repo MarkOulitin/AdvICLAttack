@@ -8,7 +8,9 @@ from textattack.shared.utils import logger
 
 
 class ICLAttacker(Attacker):
-    def __init__(self, attack, dataset, attack_args=None):
+    def __init__(self, experiment_name, attack, dataset, attack_args=None):
+        self.experiment_name = experiment_name
+
         super().__init__(
             attack,
             dataset,
@@ -20,6 +22,9 @@ class ICLAttacker(Attacker):
 
         No parallel processing is involved.
         """
+        # add custom csv file with file color format
+        self.attack_log_manager.add_output_csv(f"./log_{self.experiment_name}_diff_format.csv", "file")
+
         if torch.cuda.is_available():
             self.attack.cuda_()
 
