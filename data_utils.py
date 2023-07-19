@@ -90,6 +90,7 @@ def load_sms_spam():
 
     return train_sentences.tolist(), train_labels.tolist(), test_sentences.tolist(), test_labels.tolist()
 
+
 def load_parler_hate():
     df = pd.read_csv(f"{ROOT_DIR}/data/parler-hate-rate/parler_annotated_data.csv")
     df = df.drop(columns=['id', 'disputable_post'])
@@ -105,6 +106,7 @@ def load_parler_hate():
 
     train_sentences, test_sentences, train_labels, test_labels = train_test_split(X, y, test_size=0.3, random_state=2)
     return train_sentences.tolist(), train_labels.tolist(), test_sentences.tolist(), test_labels.tolist()
+
 
 def load_dataset(params):
     """
@@ -152,6 +154,7 @@ def load_dataset(params):
         params['inv_label_dict'] = {'ham': 0, 'spam': 1}
         params['task_format'] = 'classification'
         params['num_tokens_to_predict'] = 1
+
     elif params['dataset'] == 'parler-hate':
         orig_train_sentences, orig_train_labels, orig_test_sentences, orig_test_labels = load_parler_hate()
         params['prompt_prefix'] = "Classify the posts based on their hate rate, when 1 is low hate rate and 5 is high hate rate and the possible values are 1, 2, 3, 4 and 5.\n\n"
