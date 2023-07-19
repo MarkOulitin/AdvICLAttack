@@ -29,7 +29,11 @@ def chunk_size_helper(params: dict) -> int:
     return bs
 
 
-def random_sampling(sentences: list[str], labels: list[int], num: int, seed: int = None) -> Tuple[list[str], list[int]]:
+def random_sampling(sentences: list[str],
+                    labels: list[int],
+                    num: int,
+                    exclude_index: int = None,
+                    seed: int = None) -> Tuple[list[str], list[int]]:
     """Randomly sample subset of the training pairs"""
     assert len(sentences) == len(labels)
     if num > len(labels):
@@ -38,7 +42,14 @@ def random_sampling(sentences: list[str], labels: list[int], num: int, seed: int
     if seed is not None:
         np.random.seed(seed)
 
-    idxs = np.random.choice(len(labels), size=num, replace=False)
+    if exclude_index is not None:
+        while True:
+            idxs = np.random.choice(len(labels), size=num, replace=False)
+            if exclude_index not in idxs:
+                break
+    else:
+        idxs = np.random.choice(len(labels), size=num, replace=False)
+
     selected_sentences = [sentences[i] for i in idxs]
     selected_labels = [labels[i] for i in idxs]
 
