@@ -1,6 +1,6 @@
+from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
-
 import numpy as np
 import textattack
 import torch
@@ -36,6 +36,24 @@ class ICLInput:
             icl_example_selection_strategy_first = ICLExampleSelectionStrategyFirst()
             icl_example_selector = ICLExampleSelector(icl_example_selection_strategy_first)
             icl_example_selector.select_example_and_update_metadata_inplace(self)
+
+    def exclude(self, examples_indexes: list[int], inplace: bool = False) -> ICLInput:
+        example_sentences=[sentence for i, sentence in enumerate(self.example_sentences) if i not in examples_indexes],
+        example_labels=[label for i, label in enumerate(self.example_labels) if i not in examples_indexes],
+        if not inplace:
+            return ICLInput(
+                example_sentences=example_sentences,
+                example_labels=example_labels,
+                test_sentence=self.test_sentence,
+                params=self.params,
+                pertubation_example_sentence_index=self.pertubation_example_sentence_index,
+                attacked_text=self.attacked_text
+            )
+        else:
+            self.example_sentences = example_sentences
+            self.example_labels = example_labels
+            return self
+
 
     def construct_prompt(self) -> str:
         assert self.attacked_text is not None
@@ -81,8 +99,30 @@ class ICLExampleSelectionStrategyRandom(ICLExampleSelectionStrategy):
 
 
 class ICLExampleSelectionStrategyGreedy(ICLExampleSelectionStrategy):
-    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
-        pass
+
+    def __init__(self, model: ICLModelWrapper) -> None:
+        super().__init__()
+        self._model: ICLModelWrapper = model
+
+    def select_example_and_update_metadata_inplace(self, sample: ICLInput):
+        if len(sample.example_sentences) != len(sample.example_labels):
+            raise Exception('Got sample with unequal amount of examples and labels')
+        if len(sample.example_sentences) == 0:
+            raise Exception('Got sample without examples and labels')
+        if len(sample.example_sentences) == 1:
+            raise Exception('Got sample with one example and label')
+        min_score = self._model([sample])[0]
+        most_imporatant_example_index = -1
+        for i in range(len(sample.example_sentences)):
+            masked_sample: ICLInput = sample.exclude([i])
+            score = self._model([masked_sample])[0]
+            if score < min_score:
+                most_imporatant_example_index = i
+                min_score = score
+        return sample.exclude(
+            examples_indexes=[i for i in range(sample.example_sentences) if i != most_imporatant_example_index],
+            inplace=True
+        )
 
 
 class ICLExampleSelector:
@@ -204,7 +244,7 @@ class ICLAttack(TextBuggerLi2018):
 
         return ICLAttack(goal_function, constraints, transformation, search_method)
 
-    def attack(self, icl_input: ICLInput, ground_truth_output, example_selection_strategy=None):
+    def attack(self, icl_input: ICLInput, ground_truth_output, example_selection_strategy: str = None):
         assert isinstance(
             ground_truth_output, (int, str)
         ), "`ground_truth_output` must either be `str` or `int`."
@@ -216,11 +256,21 @@ class ICLAttack(TextBuggerLi2018):
             return SkippedAttackResult(goal_function_result)
         else:
             # default strategy, choose random icl example for the attack
-            if example_selection_strategy is not None:
-                pass
-            else:
+            if example_selection_strategy is None:
+                # TODO change to random and not to first
                 icl_example_selection_strategy_first = ICLExampleSelectionStrategyFirst()
                 icl_example_selector = ICLExampleSelector(icl_example_selection_strategy_first)
+                icl_example_selector.select_example_and_update_metadata_inplace(icl_input)
+            else:
+                strategies = {
+                    'first': ICLExampleSelectionStrategyFirst(),
+                    'random': ICLExampleSelectionStrategyRandom(),
+                    'greedy': ICLExampleSelectionStrategyGreedy(self.goal_function.model),
+                }
+                if example_selection_strategy not in list(strategies.keys()):
+                    raise Exception("got strategy that is not 'first', 'random' or 'greedy'")
+                icl_example_selection_strategy = strategies[example_selection_strategy]
+                icl_example_selector = ICLExampleSelector(icl_example_selection_strategy)
                 icl_example_selector.select_example_and_update_metadata_inplace(icl_input)
 
             result = self._attack(goal_function_result)
