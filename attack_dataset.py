@@ -2,7 +2,7 @@ from copy import deepcopy
 
 from textattack.datasets import Dataset
 
-from attack_utils import ICLInput
+from icl_sample_selection import ICLInput
 from utils import random_sampling
 
 

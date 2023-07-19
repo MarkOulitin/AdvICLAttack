@@ -1,6 +1,5 @@
 from __future__ import annotations
 from copy import deepcopy
-from dataclasses import dataclass
 import numpy as np
 import textattack
 import torch
@@ -10,137 +9,12 @@ from textattack.constraints.pre_transformation import RepeatModification, Stopwo
 from textattack.constraints.semantics.sentence_encoders import UniversalSentenceEncoder
 from textattack.goal_function_results import GoalFunctionResultStatus, ClassificationGoalFunctionResult
 from textattack.goal_functions import UntargetedClassification
-from textattack.models.wrappers import ModelWrapper
 from textattack.search_methods import SearchMethod
-from textattack.shared import AttackedText
 from textattack.shared.validators import transformation_consists_of_word_swaps_and_deletions
 from textattack.transformations import CompositeTransformation, WordSwapRandomCharacterInsertion, \
     WordSwapRandomCharacterDeletion, WordSwapNeighboringCharacterSwap, WordSwapHomoglyphSwap, WordSwapEmbedding
 
-from llm_utils import construct_prompt, create_completion
-from abc import ABC, abstractmethod
-
-
-@dataclass
-class ICLInput:
-    example_sentences: list[str]
-    example_labels: list[int]
-    test_sentence: str
-    params: dict
-    pertubation_example_sentence_index: int = -1
-    attacked_text: AttackedText = None
-
-    def __post_init__(self):
-        if self.attacked_text is None:
-            # default init of the first example
-            icl_example_selection_strategy_first = ICLExampleSelectionStrategyFirst()
-            icl_example_selector = ICLExampleSelector(icl_example_selection_strategy_first)
-            icl_example_selector.select_example_and_update_metadata_inplace(self)
-
-    def exclude(self, examples_indexes: list[int], inplace: bool = False) -> ICLInput:
-        example_sentences=[sentence for i, sentence in enumerate(self.example_sentences) if i not in examples_indexes],
-        example_labels=[label for i, label in enumerate(self.example_labels) if i not in examples_indexes],
-        if not inplace:
-            return ICLInput(
-                example_sentences=example_sentences,
-                example_labels=example_labels,
-                test_sentence=self.test_sentence,
-                params=self.params,
-                pertubation_example_sentence_index=self.pertubation_example_sentence_index,
-                attacked_text=self.attacked_text
-            )
-        else:
-            self.example_sentences = example_sentences
-            self.example_labels = example_labels
-            return self
-
-
-    def construct_prompt(self) -> str:
-        assert self.attacked_text is not None
-        assert self.pertubation_example_sentence_index != -1
-
-        example_sentences_with_pertubation = deepcopy(self.example_sentences)
-        pertubation_sentence_index = self.pertubation_example_sentence_index
-        pertubation_sentence = self.attacked_text.text
-        example_sentences_with_pertubation[pertubation_sentence_index] = pertubation_sentence
-
-        prompt = construct_prompt(self.params,
-                                  example_sentences_with_pertubation,
-                                  self.example_labels,
-                                  self.test_sentence)
-
-        return prompt
-
-
-class ICLExampleSelectionStrategy(ABC):
-    @abstractmethod
-    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
-        pass
-
-
-class ICLExampleSelectionStrategyFirst(ICLExampleSelectionStrategy):
-    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
-        icl_input.attacked_text = AttackedText(icl_input.example_sentences[0])
-        icl_input.pertubation_example_sentence_index = 0
-        assert icl_input.attacked_text.text == icl_input.example_sentences[0]
-
-
-class ICLExampleSelectionStrategyRandom(ICLExampleSelectionStrategy):
-    def __init__(self,
-                 seed: int = 0):
-        self._rng = np.random.RandomState(seed)
-
-    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
-        example_index = self.rng.choice(np.arange(0, len(icl_input.example_sentences)), 1)[0]
-
-        icl_input.attacked_text = AttackedText(icl_input.example_sentences[example_index])
-        icl_input.pertubation_example_sentence_index = example_index
-        assert icl_input.attacked_text.text == icl_input.example_sentences[example_index]
-
-
-class ICLExampleSelectionStrategyGreedy(ICLExampleSelectionStrategy):
-
-    def __init__(self, model: ICLModelWrapper) -> None:
-        super().__init__()
-        self._model: ICLModelWrapper = model
-
-    def select_example_and_update_metadata_inplace(self, sample: ICLInput):
-        if len(sample.example_sentences) != len(sample.example_labels):
-            raise Exception('Got sample with unequal amount of examples and labels')
-        if len(sample.example_sentences) == 0:
-            raise Exception('Got sample without examples and labels')
-        if len(sample.example_sentences) == 1:
-            raise Exception('Got sample with one example and label')
-        min_score = self._model([sample])[0]
-        most_imporatant_example_index = -1
-        for i in range(len(sample.example_sentences)):
-            masked_sample: ICLInput = sample.exclude([i])
-            score = self._model([masked_sample])[0]
-            if score < min_score:
-                most_imporatant_example_index = i
-                min_score = score
-        return sample.exclude(
-            examples_indexes=[i for i in range(sample.example_sentences) if i != most_imporatant_example_index],
-            inplace=True
-        )
-
-
-class ICLExampleSelector:
-    def __init__(self,
-                 strategy: ICLExampleSelectionStrategy) -> None:
-        self._strategy = strategy
-
-    @property
-    def strategy(self) -> ICLExampleSelectionStrategy:
-        return self._strategy
-
-    @strategy.setter
-    def strategy(self, strategy: ICLExampleSelectionStrategy) -> None:
-        self._strategy = strategy
-
-    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput) -> None:
-        self.strategy.select_example_and_update_metadata_inplace(icl_input)
-
+from icl_sample_selection import ICLInput, get_strategy
 
 class ICLClassificationGoalFunctionResult(ClassificationGoalFunctionResult):
     """Represents the result of a classification goal function."""
@@ -258,20 +132,10 @@ class ICLAttack(TextBuggerLi2018):
             # default strategy, choose random icl example for the attack
             if example_selection_strategy is None:
                 # TODO change to random and not to first
-                icl_example_selection_strategy_first = ICLExampleSelectionStrategyFirst()
-                icl_example_selector = ICLExampleSelector(icl_example_selection_strategy_first)
-                icl_example_selector.select_example_and_update_metadata_inplace(icl_input)
+                icl_example_selector = get_strategy('first')
             else:
-                strategies = {
-                    'first': ICLExampleSelectionStrategyFirst(),
-                    'random': ICLExampleSelectionStrategyRandom(),
-                    'greedy': ICLExampleSelectionStrategyGreedy(self.goal_function.model),
-                }
-                if example_selection_strategy not in list(strategies.keys()):
-                    raise Exception("got strategy that is not 'first', 'random' or 'greedy'")
-                icl_example_selection_strategy = strategies[example_selection_strategy]
-                icl_example_selector = ICLExampleSelector(icl_example_selection_strategy)
-                icl_example_selector.select_example_and_update_metadata_inplace(icl_input)
+                icl_example_selector = get_strategy(example_selection_strategy, self.goal_function.model)
+            icl_example_selector.select_example_and_update_metadata_inplace(icl_input)
 
             result = self._attack(goal_function_result)
             return result
@@ -455,32 +319,3 @@ class ICLGreedyWordSwapWIR(SearchMethod):
     @property
     def is_black_box(self):
         return True
-
-
-class ICLModelWrapper(ModelWrapper):
-    def __init__(self, llm_model, device):
-        self.model = llm_model
-        self.device = device
-
-    def __call__(self, icl_input_list: list[ICLInput]):
-        outputs_probs = []
-
-        for icl_input in icl_input_list:
-            params = icl_input.params
-            # num_classes = len(params['label_dict'].keys())
-
-            prompt = icl_input.construct_prompt()
-            llm_response, label_probs = create_completion(prompt,
-                                                          params['inv_label_dict'],
-                                                          params['num_tokens_to_predict'],
-                                                          params['model'],
-                                                          self.device,
-                                                          self.model,
-                                                          num_logprobs=params['api_num_logprob'])
-            # llm_response = llm_response['choices'][0]  # llama cpp logic
-            # label_probs = get_probs(params, num_classes, llm_response)
-            outputs_probs.append(label_probs)
-
-        outputs_probs = np.array(outputs_probs)  # probs are normalized
-
-        return outputs_probs
