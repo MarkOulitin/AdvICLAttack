@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from textattack.shared import AttackedText
 
-from attack_utils import ICLInput, ICLModelWrapper, ICLUntargetedClassification
+from attack_utils import ICLInput, ICLUntargetedClassification
 
 
 class ExampleSelectionStrategy(ABC):
@@ -49,6 +49,8 @@ class GreedyExampleSelection(ExampleSelectionStrategy):
         if len(icl_input.example_sentences) == 1:
             raise Exception('Got sample with one example and label')
 
+        assert self._goal_function.ground_truth_output is not None  # self._goal_function.init_attack_example method must be invoked before this method
+
         masked_one_examples = [
             icl_input.exclude([i]) for i in range(len(icl_input.example_sentences))
         ]
@@ -65,10 +67,10 @@ class GreedyExampleSelection(ExampleSelectionStrategy):
 
 class GreedyExampleSentenceSelection(ExampleSelectionStrategy):
 
-    def __init__(self, model: ICLModelWrapper) -> None:
+    def __init__(self, goal_function: ICLUntargetedClassification) -> None:
         super().__init__()
-        self._model: ICLModelWrapper = model
-        self.example_selection: GreedyExampleSelection = GreedyExampleSelection(model)
+        self._goal_function: ICLUntargetedClassification = goal_function
+        self.example_selection: GreedyExampleSelection = GreedyExampleSelection(goal_function)
 
     def select_example_and_update_metadata_inplace(self, sample: ICLInput):
         if len(sample.example_sentences) != len(sample.example_labels):
@@ -83,7 +85,7 @@ class GreedyExampleSentenceSelection(ExampleSelectionStrategy):
         if len(sentences) == 1:
             # we selected the most example but by chance it contains only one sentence
             return
-        min_score = self._model([sample])[0]
+        min_score = self._model([sample])[0] # TODO
         most_imporatant_sentence_index = -1
         for i in range(len(sentences)):
             masked_sample: ICLInput = self._mask_sentence_of_sample(sample, sentences, i)
@@ -132,15 +134,15 @@ class ExampleSelector:
         self.strategy.select_example_and_update_metadata_inplace(icl_input)
 
 
-def get_strategy(strategy_method: str, model: ICLModelWrapper = None) -> ExampleSelector:
+def get_strategy(strategy_method: str, goal_function: ICLUntargetedClassification = None) -> ExampleSelector:
     if strategy_method == 'first':
         strategy = FistExampleSelection()
     elif strategy_method == 'random':
         strategy = RandomExampleSelection()
     elif strategy_method in ['greedy-example', 'greedy-example-sentence']:
-        if model is None:
-            raise Exception('to use model dependent strategy model need to be not None')
-        strategy = _get_model_dependent_strategy(strategy_method, model)
+        if goal_function is None:
+            raise Exception('to use model dependent strategy goal_function must not be None')
+        strategy = _get_model_dependent_strategy(strategy_method, goal_function)
     else:
         raise Exception("got strategy that is not 'first', 'random', 'greedy-example' or 'greedy-example-sentence'")
 
@@ -148,10 +150,10 @@ def get_strategy(strategy_method: str, model: ICLModelWrapper = None) -> Example
     return example_selector
 
 
-def _get_model_dependent_strategy(strategy_method: str, model: ICLModelWrapper) -> ExampleSelectionStrategy:
+def _get_model_dependent_strategy(strategy_method: str, goal_function: ICLUntargetedClassification) -> ExampleSelectionStrategy:
     if strategy_method == 'greedy-example':
-        return GreedyExampleSelection(model)
+        return GreedyExampleSelection(goal_function)
     elif strategy_method == 'greedy-example-sentence':
-        return GreedyExampleSentenceSelection(model)
+        return GreedyExampleSentenceSelection(goal_function)
     else:
         raise Exception("got strategy that is not 'greedy-example' or 'greedy-example-sentence'")

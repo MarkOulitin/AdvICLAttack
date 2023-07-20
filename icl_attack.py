@@ -89,7 +89,7 @@ class ICLAttack(TextBuggerLi2018):
             if example_selection_strategy is None:
                 icl_example_selector = get_strategy('random')
             else:
-                icl_example_selector = get_strategy(example_selection_strategy, self.goal_function.model)
+                icl_example_selector = get_strategy(example_selection_strategy, self.goal_functionl)
             icl_example_selector.select_example_and_update_metadata_inplace(icl_input)
 
             result = self._attack(goal_function_result)
