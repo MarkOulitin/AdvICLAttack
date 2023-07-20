@@ -47,9 +47,9 @@ class ICLDataset(Dataset):
 class ICLTransferabilityDataset(Dataset):
     def __init__(
             self,
-            original_demonstration: str,
-            adversarial_demonstration: str,
-            adversarial_demonstration_index: int,
+            original_example: str,
+            adversarial_example: str,
+            adversarial_example_index: int,
             test_sentences: list[str],
             test_labels: list[int],
             all_train_sentences: list[str],
@@ -57,9 +57,9 @@ class ICLTransferabilityDataset(Dataset):
             num_shots: int,
             params: dict
     ):
-        self._original_demonstration = original_demonstration
-        self._adversarial_demonstration = adversarial_demonstration
-        self._adversarial_demonstration_index = adversarial_demonstration_index
+        self._original_example = original_example
+        self._adversarial_example = adversarial_example
+        self._adversarial_example_index = adversarial_example_index
         self._test_sentences = deepcopy(test_sentences)
         self._test_labels = test_labels
         self._all_example_sentences = deepcopy(all_train_sentences)
@@ -68,16 +68,20 @@ class ICLTransferabilityDataset(Dataset):
         self._params = deepcopy(params)
         self.shuffled = False
 
-        self._generate_examples_using_adversarial_demonstration()
+        print(f"original example: {self._original_example}")
+        print(f"adversarial example: {self._adversarial_example}")
+        print(f"adversarial example index: {self._adversarial_example_index}")
 
-    def _generate_examples_using_adversarial_demonstration(self, shuffle_example_seed: int = 0):
+        self._generate_examples_using_adversarial_example()
+
+    def _generate_examples_using_adversarial_example(self, shuffle_example_seed: int = 0):
         # sample few-shot training examples without given demonstration
         example_sentences, example_labels = random_sampling(self._all_example_sentences,
                                                             self._all_example_labels,
                                                             self._num_shots - 1,
-                                                            exclude_index=self._adversarial_demonstration_index)
-        example_sentences.append(self._original_demonstration)
-        demonstration_label = self._all_example_labels[self._adversarial_demonstration_index]
+                                                            exclude_index=self._adversarial_example_index)
+        example_sentences.append(self._original_example)
+        demonstration_label = self._all_example_labels[self._adversarial_example_index]
         example_labels.append(demonstration_label)
 
         # Set the random seed
@@ -90,6 +94,9 @@ class ICLTransferabilityDataset(Dataset):
         self._example_sentences = example_sentences
         self._example_labels = example_labels
 
+        print()
+        print(f"chosen examples: {self._example_sentences}")
+
     def __getitem__(self, i):
         assert len(self._example_sentences)
         assert len(self._example_labels)
@@ -97,8 +104,8 @@ class ICLTransferabilityDataset(Dataset):
         test_sentence = deepcopy(self._test_sentences[i])
         test_label = self._test_labels[i]
 
-        pertubation_sentence_index = self._example_sentences.index(self._original_demonstration)
-        attacked_text = AttackedText(self._adversarial_demonstration)
+        pertubation_sentence_index = self._example_sentences.index(self._original_example)
+        attacked_text = AttackedText(self._adversarial_example)
 
         icl_input = ICLInput(self._example_sentences,
                              self._example_labels,
