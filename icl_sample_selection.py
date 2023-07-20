@@ -106,7 +106,7 @@ class GreedyExampleSentenceSelection(ExampleSelectionStrategy):
     def _split_text_to_sentences(self, text):
         import nltk
         nltk.download('punkt')  # Download the Punkt tokenizer data if not available
-        
+
         # Preprocess the text to handle emojis and punctuation marks
         text = re.sub(r'([^\s\w.?!]|_)+', ' ', text)
         
