@@ -1,92 +1,13 @@
 from __future__ import annotations
-from llm_utils import construct_prompt, create_completion
-from textattack.shared import AttackedText
-from textattack.models.wrappers import ModelWrapper
-from dataclasses import dataclass
-from abc import ABC, abstractmethod
-from copy import deepcopy
-import numpy as np
-import nltk
+
 import re
-nltk.download('punkt')  # Download the Punkt tokenizer data if not available
+from abc import ABC, abstractmethod
 
-class ICLModelWrapper(ModelWrapper):
-    def __init__(self, llm_model, device):
-        self.model = llm_model
-        self.device = device
+import numpy as np
+from textattack.shared import AttackedText
 
-    def __call__(self, icl_input_list: list[ICLInput]):
-        outputs_probs = []
+from attack_utils import ICLInput, ICLModelWrapper, ICLUntargetedClassification
 
-        for icl_input in icl_input_list:
-            params = icl_input.params
-            # num_classes = len(params['label_dict'].keys())
-
-            prompt = icl_input.construct_prompt()
-            llm_response, label_probs = create_completion(prompt,
-                                                          params['inv_label_dict'],
-                                                          params['num_tokens_to_predict'],
-                                                          params['model'],
-                                                          self.device,
-                                                          self.model,
-                                                          num_logprobs=params['api_num_logprob'])
-            # llm_response = llm_response['choices'][0]  # llama cpp logic
-            # label_probs = get_probs(params, num_classes, llm_response)
-            outputs_probs.append(label_probs)
-
-        outputs_probs = np.array(outputs_probs)  # probs are normalized
-
-        return outputs_probs
-
-@dataclass
-class ICLInput:
-    example_sentences: list[str]
-    example_labels: list[int]
-    test_sentence: str
-    params: dict
-    pertubation_example_sentence_index: int = -1
-    attacked_text: AttackedText = None
-
-    def __post_init__(self):
-        if self.attacked_text is None:
-            # default init of the first example
-            icl_example_selection_strategy_first = FistExampleSelection()
-            icl_example_selector = ExampleSelector(icl_example_selection_strategy_first)
-            icl_example_selector.select_example_and_update_metadata_inplace(self)
-
-    def exclude(self, examples_indexes: list[int], inplace: bool = False) -> ICLInput:
-        example_sentences=[sentence for i, sentence in enumerate(self.example_sentences) if i not in examples_indexes],
-        example_labels=[label for i, label in enumerate(self.example_labels) if i not in examples_indexes],
-        if not inplace:
-            return ICLInput(
-                example_sentences=example_sentences,
-                example_labels=example_labels,
-                test_sentence=self.test_sentence,
-                params=self.params,
-                pertubation_example_sentence_index=self.pertubation_example_sentence_index,
-                attacked_text=self.attacked_text
-            )
-        else:
-            self.example_sentences = example_sentences
-            self.example_labels = example_labels
-            return self
-
-
-    def construct_prompt(self) -> str:
-        assert self.attacked_text is not None
-        assert self.pertubation_example_sentence_index != -1
-
-        example_sentences_with_pertubation = deepcopy(self.example_sentences)
-        pertubation_sentence_index = self.pertubation_example_sentence_index
-        pertubation_sentence = self.attacked_text.text
-        example_sentences_with_pertubation[pertubation_sentence_index] = pertubation_sentence
-
-        prompt = construct_prompt(self.params,
-                                  example_sentences_with_pertubation,
-                                  self.example_labels,
-                                  self.test_sentence)
-
-        return prompt
 
 class ExampleSelectionStrategy(ABC):
     @abstractmethod
@@ -114,32 +35,33 @@ class RandomExampleSelection(ExampleSelectionStrategy):
         assert icl_input.attacked_text.text == icl_input.example_sentences[example_index]
 
 
-
 class GreedyExampleSelection(ExampleSelectionStrategy):
 
-    def __init__(self, model: ICLModelWrapper) -> None:
+    def __init__(self, goal_function: ICLUntargetedClassification) -> None:
         super().__init__()
-        self._model: ICLModelWrapper = model
+        self._goal_function: ICLUntargetedClassification = goal_function
 
-    def select_example_and_update_metadata_inplace(self, sample: ICLInput):
-        if len(sample.example_sentences) != len(sample.example_labels):
+    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
+        if len(icl_input.example_sentences) != len(icl_input.example_labels):
             raise Exception('Got sample with unequal amount of examples and labels')
-        if len(sample.example_sentences) == 0:
+        if len(icl_input.example_sentences) == 0:
             raise Exception('Got sample without examples and labels')
-        if len(sample.example_sentences) == 1:
+        if len(icl_input.example_sentences) == 1:
             raise Exception('Got sample with one example and label')
-        min_score = self._model([sample])[0]
-        most_imporatant_example_index = -1
-        for i in range(len(sample.example_sentences)):
-            masked_sample: ICLInput = sample.exclude([i])
-            score = self._model([masked_sample])[0]
-            if score < min_score:
-                most_imporatant_example_index = i
-                min_score = score
-        sample.exclude(
-            examples_indexes=[i for i in range(sample.example_sentences) if i != most_imporatant_example_index],
-            inplace=True
-        )
+
+        masked_one_examples = [
+            icl_input.exclude([i]) for i in range(len(icl_input.example_sentences))
+        ]
+
+        masked_one_examples_results, search_over = self._goal_function.get_results(masked_one_examples)
+        index_scores = np.array([result.score for result in masked_one_examples_results])  # scores are 1 - prob
+
+        most_important_example_index = np.argmax(index_scores)
+
+        icl_input.attacked_text = AttackedText(icl_input.example_sentences[most_important_example_index])
+        icl_input.pertubation_example_sentence_index = most_important_example_index
+        assert icl_input.attacked_text.text == icl_input.example_sentences[most_important_example_index]
+
 
 class GreedyExampleSentenceSelection(ExampleSelectionStrategy):
 
@@ -155,6 +77,7 @@ class GreedyExampleSentenceSelection(ExampleSelectionStrategy):
             raise Exception('Got sample without examples and labels')
         if len(sample.example_sentences) == 1:
             raise Exception('Got sample with one example and label')
+
         self.example_selection.select_example_and_update_metadata_inplace(sample)
         sentences = self._split_text_to_sentences(sample.example_sentences[0])
         if len(sentences) == 1:
@@ -181,12 +104,16 @@ class GreedyExampleSentenceSelection(ExampleSelectionStrategy):
         )
     
     def _split_text_to_sentences(self, text):
+        import nltk
+        nltk.download('punkt')  # Download the Punkt tokenizer data if not available
+        
         # Preprocess the text to handle emojis and punctuation marks
         text = re.sub(r'([^\s\w.?!]|_)+', ' ', text)
         
         # Use the NLTK tokenizer to split the text into sentences
         sentences = nltk.sent_tokenize(text)
         return sentences
+
 
 class ExampleSelector:
     def __init__(self,
@@ -204,7 +131,8 @@ class ExampleSelector:
     def select_example_and_update_metadata_inplace(self, icl_input: ICLInput) -> None:
         self.strategy.select_example_and_update_metadata_inplace(icl_input)
 
-def get_strategy(strategy_method: str, model: ICLModelWrapper=None) -> ExampleSelector:
+
+def get_strategy(strategy_method: str, model: ICLModelWrapper = None) -> ExampleSelector:
     if strategy_method == 'first':
         strategy = FistExampleSelection()
     elif strategy_method == 'random':
@@ -215,8 +143,10 @@ def get_strategy(strategy_method: str, model: ICLModelWrapper=None) -> ExampleSe
         strategy = _get_model_dependent_strategy(strategy_method, model)
     else:
         raise Exception("got strategy that is not 'first', 'random', 'greedy-example' or 'greedy-example-sentence'")
+
     example_selector = ExampleSelector(strategy)
     return example_selector
+
 
 def _get_model_dependent_strategy(strategy_method: str, model: ICLModelWrapper) -> ExampleSelectionStrategy:
     if strategy_method == 'greedy-example':
