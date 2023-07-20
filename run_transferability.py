@@ -43,7 +43,7 @@ def main(models: list[str],
                     p['dataset'] = dataset
                     p['seed'] = seed
                     p['num_shots'] = num_shots
-                    p['expr_name'] = f"transferability_{p['dataset']}_{p['model']}_{p['num_shots']}shot_{repr(p['subsample_test_set'])}_subsample_seed{p['seed']}"
+                    p['expr_name'] = f"transferability_{p['dataset']}_{p['model']}_{p['num_shots']}_shot_{repr(p['subsample_test_set'])}_subsample_{p['seed']}_seed"
                     all_params.append(p)
 
 
