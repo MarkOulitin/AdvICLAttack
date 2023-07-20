@@ -43,14 +43,15 @@ class ICLInput:
             self.example_labels = example_labels
             return self
 
-    def construct_prompt(self) -> str:
+    def construct_prompt(self, ignore_attacked_text: bool = False) -> str:
         assert self.attacked_text is not None
         assert self.pertubation_example_sentence_index != -1
 
         example_sentences_with_pertubation = deepcopy(self.example_sentences)
         pertubation_sentence_index = self.pertubation_example_sentence_index
         pertubation_sentence = self.attacked_text.text
-        example_sentences_with_pertubation[pertubation_sentence_index] = pertubation_sentence
+        if not ignore_attacked_text:
+            example_sentences_with_pertubation[pertubation_sentence_index] = pertubation_sentence
 
         prompt = construct_prompt(self.params,
                                   example_sentences_with_pertubation,

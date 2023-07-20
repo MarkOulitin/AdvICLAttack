@@ -248,7 +248,6 @@ class ICLModelWrapper(ModelWrapper):
 
         for icl_input in icl_input_list:
             params = icl_input.params
-            # num_classes = len(params['label_dict'].keys())
 
             prompt = icl_input.construct_prompt(self.ignore_attacked_text)
             llm_response, label_probs = create_completion(prompt,
