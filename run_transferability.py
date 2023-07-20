@@ -99,7 +99,7 @@ def run_experiments(params_list):
                                                                                       params)
 
 
-        attacker = ICLAttacker(experiment_name, attack, attack_dataset, attack_args)
+        attacker = ICLTransferabilityAttack(experiment_name, attack, attack_dataset, attack_args)
         attacker.attack_dataset()
 
 
