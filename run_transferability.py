@@ -10,6 +10,7 @@ import torch
 from attack_dataset import ICLTransferabilityDataset
 from attack_utils import ICLModelWrapper
 from data_utils import load_dataset
+from icl_attaker import ICLAttacker
 from llm_setups import setup_llama_hf
 from transferability_attack import ICLTransferabilityAttack
 from utils import random_sampling
@@ -98,7 +99,7 @@ def run_experiments(params_list):
                                                                                       params)
 
 
-        attacker = ICLTransferabilityAttack(experiment_name, attack, attack_dataset, attack_args)
+        attacker = ICLAttacker(experiment_name, attack, attack_dataset, attack_args)
         attacker.attack_dataset()
 
 
