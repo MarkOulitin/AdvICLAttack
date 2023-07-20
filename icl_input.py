@@ -5,7 +5,8 @@ from dataclasses import dataclass
 
 from textattack.shared import AttackedText
 
-from icl_sample_selection import FistExampleSelection, ExampleSelector
+import icl_sample_selection as example_selector
+
 from llm_utils import construct_prompt
 
 
@@ -21,8 +22,8 @@ class ICLInput:
     def __post_init__(self):
         if self.attacked_text is None:
             # default init of the first example
-            icl_example_selection_strategy_first = FistExampleSelection()
-            icl_example_selector = ExampleSelector(icl_example_selection_strategy_first)
+            icl_example_selection_strategy_first = example_selector.FistExampleSelection()
+            icl_example_selector = example_selector.ExampleSelector(icl_example_selection_strategy_first)
             icl_example_selector.select_example_and_update_metadata_inplace(self)
 
     def exclude(self, examples_indexes: list[int], inplace: bool = False) -> ICLInput:

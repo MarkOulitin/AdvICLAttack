@@ -6,9 +6,10 @@ import textattack
 import torch
 
 from attack_dataset import ICLDataset
-from attack_utils import ICLAttack
-from icl_sample_selection import ICLModelWrapper
+from attack_utils import ICLModelWrapper
+
 from data_utils import load_dataset
+from icl_attack import ICLAttack
 from icl_attaker import ICLAttacker
 from llm_setups import setup_llama_hf
 from llm_utils import create_completion

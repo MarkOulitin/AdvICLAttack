@@ -10,7 +10,6 @@ import torch
 from attack_dataset import ICLTransferabilityDataset
 from attack_utils import ICLModelWrapper
 from data_utils import load_dataset
-from icl_attaker import ICLAttacker
 from llm_setups import setup_llama_hf
 from transferability_attack import ICLTransferabilityAttack
 from utils import random_sampling
