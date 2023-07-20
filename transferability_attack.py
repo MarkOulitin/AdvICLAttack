@@ -4,7 +4,8 @@ from textattack.goal_function_results import GoalFunctionResultStatus
 from textattack.search_methods import SearchMethod
 from textattack.transformations import WordSwap
 
-from attack_utils import ICLUntargetedClassification, ICLInput, ICLClassificationGoalFunctionResult
+from attack_utils import ICLUntargetedClassification, ICLClassificationGoalFunctionResult
+from icl_input import ICLInput
 
 
 class ICLTransferabilitySearch(SearchMethod):

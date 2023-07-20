@@ -11,7 +11,7 @@ from textattack.models.wrappers import ModelWrapper
 from textattack.search_methods import SearchMethod
 from textattack.shared.validators import transformation_consists_of_word_swaps_and_deletions
 
-from icl_input import ICLInput
+import icl_input as attack_input
 from llm_utils import create_completion
 
 
@@ -20,7 +20,7 @@ class ICLClassificationGoalFunctionResult(ClassificationGoalFunctionResult):
 
     def __init__(
             self,
-            icl_input: ICLInput,
+            icl_input: attack_input.ICLInput,
             raw_output,
             output,
             goal_status,
@@ -67,7 +67,7 @@ class ICLUntargetedClassification(UntargetedClassification):
         result, _ = self.get_result(icl_input, check_skip=True)
         return result, _
 
-    def get_results(self, icl_input_list: list[ICLInput], check_skip=False):
+    def get_results(self, icl_input_list: list[attack_input.ICLInput], check_skip=False):
         """For each attacked_text object in attacked_text_list, returns a
         result consisting of whether or not the goal has been achieved, the
         output for display purposes, and a score.
@@ -100,7 +100,7 @@ class ICLUntargetedClassification(UntargetedClassification):
             )
         return results, self.num_queries == self.query_budget
 
-    def _call_model_uncached(self, attacked_text_list: list[ICLInput]) -> np.ndarray:
+    def _call_model_uncached(self, attacked_text_list: list[attack_input.ICLInput]) -> np.ndarray:
         """Queries model and returns outputs for a list of AttackedText
         objects."""
         if not len(attacked_text_list):
@@ -146,7 +146,7 @@ class ICLUntargetedClassification(UntargetedClassification):
 
 
 class ICLGreedyWordSwapWIR(SearchMethod):
-    def _get_index_order(self, initial_icl_input: ICLInput):
+    def _get_index_order(self, initial_icl_input: attack_input.ICLInput):
         """Returns word indices of ``initial_text`` in descending order of
         importance."""
 
@@ -156,12 +156,12 @@ class ICLGreedyWordSwapWIR(SearchMethod):
         leave_one_texts = [
             initial_text.delete_word_at_index(i) for i in indices_to_order
         ]
-        leave_one_icl_inputs = [ICLInput(initial_icl_input.example_sentences,
-                                         initial_icl_input.example_labels,
-                                         initial_icl_input.test_sentence,
-                                         initial_icl_input.params,
-                                         initial_icl_input.pertubation_example_sentence_index,
-                                         leave_one_text) for leave_one_text in leave_one_texts]
+        leave_one_icl_inputs = [attack_input.ICLInput(initial_icl_input.example_sentences,
+                                                      initial_icl_input.example_labels,
+                                                      initial_icl_input.test_sentence,
+                                                      initial_icl_input.params,
+                                                      initial_icl_input.pertubation_example_sentence_index,
+                                                      leave_one_text) for leave_one_text in leave_one_texts]
 
         leave_one_results, search_over = self.get_goal_results(leave_one_icl_inputs)
         index_scores = np.array([result.score for result in leave_one_results])
@@ -188,12 +188,12 @@ class ICLGreedyWordSwapWIR(SearchMethod):
             if len(transformed_text_candidates) == 0:
                 continue
 
-            transformed_icl_candidates = [ICLInput(icl_input.example_sentences,
-                                                   icl_input.example_labels,
-                                                   icl_input.test_sentence,
-                                                   icl_input.params,
-                                                   icl_input.pertubation_example_sentence_index,
-                                                   transformed_text_candidate) for transformed_text_candidate in
+            transformed_icl_candidates = [attack_input.ICLInput(icl_input.example_sentences,
+                                                                icl_input.example_labels,
+                                                                icl_input.test_sentence,
+                                                                icl_input.params,
+                                                                icl_input.pertubation_example_sentence_index,
+                                                                transformed_text_candidate) for transformed_text_candidate in
                                           transformed_text_candidates]
 
             results, search_over = self.get_goal_results(transformed_icl_candidates)
@@ -243,7 +243,7 @@ class ICLModelWrapper(ModelWrapper):
         self.device = device
         self.ignore_attacked_text = ignore_attacked_text
 
-    def __call__(self, icl_input_list: list[ICLInput]):
+    def __call__(self, icl_input_list: list[attack_input.ICLInput]):
         outputs_probs = []
 
         for icl_input in icl_input_list:

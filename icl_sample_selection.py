@@ -6,17 +6,16 @@ from abc import ABC, abstractmethod
 import numpy as np
 from textattack.shared import AttackedText
 
-from attack_utils import ICLInput, ICLUntargetedClassification
-
+import attack_utils as utils
 
 class ExampleSelectionStrategy(ABC):
     @abstractmethod
-    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
+    def select_example_and_update_metadata_inplace(self, icl_input: utils.ICLInput):
         pass
 
 
 class FistExampleSelection(ExampleSelectionStrategy):
-    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
+    def select_example_and_update_metadata_inplace(self, icl_input: utils.ICLInput):
         icl_input.attacked_text = AttackedText(icl_input.example_sentences[0])
         icl_input.pertubation_example_sentence_index = 0
         assert icl_input.attacked_text.text == icl_input.example_sentences[0]
@@ -27,7 +26,7 @@ class RandomExampleSelection(ExampleSelectionStrategy):
                  seed: int = 0):
         self._rng = np.random.RandomState(seed)
 
-    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
+    def select_example_and_update_metadata_inplace(self, icl_input: utils.ICLInput):
         example_index = self._rng.choice(np.arange(0, len(icl_input.example_sentences)), 1)[0]
 
         icl_input.attacked_text = AttackedText(icl_input.example_sentences[example_index])
@@ -37,9 +36,9 @@ class RandomExampleSelection(ExampleSelectionStrategy):
 
 class GreedyExampleSelection(ExampleSelectionStrategy):
 
-    def __init__(self, goal_function: ICLUntargetedClassification) -> None:
+    def __init__(self, goal_function: utils.ICLUntargetedClassification) -> None:
         super().__init__()
-        self._goal_function: ICLUntargetedClassification = goal_function
+        self._goal_function: utils.ICLUntargetedClassification = goal_function
 
     def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
         if len(icl_input.example_sentences) != len(icl_input.example_labels):
@@ -67,12 +66,12 @@ class GreedyExampleSelection(ExampleSelectionStrategy):
 
 class GreedyExampleSentenceSelection(ExampleSelectionStrategy):
 
-    def __init__(self, goal_function: ICLUntargetedClassification) -> None:
+    def __init__(self, goal_function: utils.ICLUntargetedClassification) -> None:
         super().__init__()
-        self._goal_function: ICLUntargetedClassification = goal_function
+        self._goal_function: utils.ICLUntargetedClassification = goal_function
         self.example_selection: GreedyExampleSelection = GreedyExampleSelection(goal_function)
 
-    def select_example_and_update_metadata_inplace(self, sample: ICLInput):
+    def select_example_and_update_metadata_inplace(self, sample: utils.ICLInput):
         if len(sample.example_sentences) != len(sample.example_labels):
             raise Exception('Got sample with unequal amount of examples and labels')
         if len(sample.example_sentences) == 0:
@@ -88,15 +87,15 @@ class GreedyExampleSentenceSelection(ExampleSelectionStrategy):
         min_score = self._model([sample])[0] # TODO
         most_imporatant_sentence_index = -1
         for i in range(len(sentences)):
-            masked_sample: ICLInput = self._mask_sentence_of_sample(sample, sentences, i)
+            masked_sample: utils.ICLInput = self._mask_sentence_of_sample(sample, sentences, i)
             score = self._model([masked_sample])[0]
             if score < min_score:
                 most_imporatant_sentence_index = i
                 min_score = score
         sample.example_sentences = [sentences[most_imporatant_sentence_index]]
     
-    def _mask_sentence_of_sample(self, sample: ICLInput, sentences: list[str], sentence_index: int) -> ICLInput:
-        return ICLInput(
+    def _mask_sentence_of_sample(self, sample: utils.ICLInput, sentences: list[str], sentence_index: int) -> utils.ICLInput:
+        return utils.ICLInput(
             example_sentences=[' '.join([sentence for i, sentence in enumerate(sentences) if i != sentence_index])],
             example_labels=sample.example_labels, 
             test_sentence=sample.test_sentence,
@@ -130,11 +129,11 @@ class ExampleSelector:
     def strategy(self, strategy: ExampleSelectionStrategy) -> None:
         self._strategy = strategy
 
-    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput) -> None:
+    def select_example_and_update_metadata_inplace(self, icl_input: utils.ICLInput) -> None:
         self.strategy.select_example_and_update_metadata_inplace(icl_input)
 
 
-def get_strategy(strategy_method: str, goal_function: ICLUntargetedClassification = None) -> ExampleSelector:
+def get_strategy(strategy_method: str, goal_function: utils.ICLUntargetedClassification = None) -> ExampleSelector:
     if strategy_method == 'first':
         strategy = FistExampleSelection()
     elif strategy_method == 'random':
@@ -150,7 +149,7 @@ def get_strategy(strategy_method: str, goal_function: ICLUntargetedClassificatio
     return example_selector
 
 
-def _get_model_dependent_strategy(strategy_method: str, goal_function: ICLUntargetedClassification) -> ExampleSelectionStrategy:
+def _get_model_dependent_strategy(strategy_method: str, goal_function: utils.ICLUntargetedClassification) -> ExampleSelectionStrategy:
     if strategy_method == 'greedy-example':
         return GreedyExampleSelection(goal_function)
     elif strategy_method == 'greedy-example-sentence':

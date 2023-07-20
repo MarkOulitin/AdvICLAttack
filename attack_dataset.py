@@ -4,7 +4,7 @@ from copy import deepcopy
 from textattack.datasets import Dataset
 from textattack.shared import AttackedText
 
-from icl_sample_selection import ICLInput
+from icl_input import ICLInput
 from utils import random_sampling
 
 
@@ -74,7 +74,7 @@ class ICLTransferabilityDataset(Dataset):
         # sample few-shot training examples without given demonstration
         example_sentences, example_labels = random_sampling(self._all_example_sentences,
                                                             self._all_example_labels,
-                                                            self._num_shots,
+                                                            self._num_shots - 1,
                                                             exclude_index=self._adversarial_demonstration_index)
         example_sentences.append(self._original_demonstration)
         demonstration_label = self._all_example_labels[self._adversarial_demonstration_index]
