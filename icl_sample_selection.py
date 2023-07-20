@@ -28,7 +28,7 @@ class RandomExampleSelection(ExampleSelectionStrategy):
         self._rng = np.random.RandomState(seed)
 
     def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
-        example_index = self.rng.choice(np.arange(0, len(icl_input.example_sentences)), 1)[0]
+        example_index = self._rng.choice(np.arange(0, len(icl_input.example_sentences)), 1)[0]
 
         icl_input.attacked_text = AttackedText(icl_input.example_sentences[example_index])
         icl_input.pertubation_example_sentence_index = example_index
