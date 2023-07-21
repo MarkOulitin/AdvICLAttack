@@ -152,7 +152,7 @@ def setup_transferability_attack_experiment(llm,
             log_to_csv=f"./log_{experiment_name}.csv",
             log_summary_to_json=f"./attack_summary_log_{experiment_name}.json",
             csv_coloring_style="plain",
-            checkpoint_interval=5,
+            checkpoint_interval=100,
             checkpoint_dir="./checkpoints",
             disable_stdout=True,
         )
