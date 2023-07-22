@@ -170,13 +170,17 @@ class ICLGreedyWordSwapWIR(SearchMethod):
 
         return index_order, search_over
 
-    def perform_search(self, initial_result: ICLClassificationGoalFunctionResult): # TODO check skip for cases of incorrect intiial labeling
-        icl_input = initial_result.icl_input
+    def perform_search(self, initial_result: ICLClassificationGoalFunctionResult):
+        def override_example_sentence(result):
+            result.icl_input.example_sentences[result.icl_input.pertubation_example_sentence_index] = result.attacked_text.text
+
+        initial_result_copy = deepcopy(initial_result)
+        icl_input = initial_result_copy.icl_input
 
         # Sort words by order of importance
         index_order, search_over = self._get_index_order(icl_input)
         i = 0
-        cur_result = deepcopy(initial_result)
+        cur_result = initial_result_copy
 
         while i < len(index_order) and not search_over:
             transformed_text_candidates = self.get_transformations(
@@ -188,19 +192,22 @@ class ICLGreedyWordSwapWIR(SearchMethod):
             if len(transformed_text_candidates) == 0:
                 continue
 
-            transformed_icl_candidates = [attack_input.ICLInput(icl_input.example_sentences,
-                                                                icl_input.example_labels,
-                                                                icl_input.test_sentence,
-                                                                icl_input.params,
-                                                                icl_input.pertubation_example_sentence_index,
+            transformed_icl_candidates = [attack_input.ICLInput(cur_result.icl_input.example_sentences,
+                                                                cur_result.icl_input.example_labels,
+                                                                cur_result.icl_input.test_sentence,
+                                                                cur_result.icl_input.params,
+                                                                cur_result.icl_input.pertubation_example_sentence_index,
                                                                 transformed_text_candidate) for transformed_text_candidate in
                                           transformed_text_candidates]
 
             results, search_over = self.get_goal_results(transformed_icl_candidates)
             results = sorted(results, key=lambda x: -x.score)
+
             # Skip swaps which don't improve the score
             if results[0].score > cur_result.score:
                 cur_result = results[0]
+                # override example sentence
+                override_example_sentence(cur_result)
             else:
                 continue
             # If we succeeded, return the index with best similarity.
@@ -223,8 +230,13 @@ class ICLGreedyWordSwapWIR(SearchMethod):
                     if similarity_score > max_similarity:
                         max_similarity = similarity_score
                         best_result = result
+
+                # override example sentence
+                override_example_sentence(cur_result)
                 return best_result
 
+        # override example sentence
+        override_example_sentence(cur_result)
         return cur_result
 
     def check_transformation_compatibility(self, transformation):
