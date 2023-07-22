@@ -26,23 +26,17 @@ class ICLInput:
             icl_example_selector = example_selector.ExampleSelector(icl_example_selection_strategy_first)
             icl_example_selector.select_example_and_update_metadata_inplace(self)
 
-    def exclude(self, examples_indexes: list[int], inplace: bool = False) -> ICLInput:
-        example_sentences = [sentence for i, sentence in enumerate(self.example_sentences) if i not in examples_indexes],
-        example_labels = [label for i, label in enumerate(self.example_labels) if i not in examples_indexes],
-
-        if not inplace:
-            return ICLInput(
-                example_sentences=example_sentences,
-                example_labels=example_labels,
-                test_sentence=self.test_sentence,
-                params=self.params,
-                pertubation_example_sentence_index=self.pertubation_example_sentence_index,
-                attacked_text=self.attacked_text
-            )
-        else:
-            self.example_sentences = example_sentences
-            self.example_labels = example_labels
-            return self
+    def exclude(self, example_index: int) -> ICLInput:
+        result = ICLInput(
+            example_sentences=[self.example_sentences[example_index]],
+            example_labels=[self.example_labels[example_index]],
+            test_sentence=self.test_sentence,
+            params=self.params,
+            pertubation_example_sentence_index = example_index,
+            attacked_text = AttackedText(self.example_sentences[example_index]),
+        )
+        assert result.attacked_text.text == self.example_sentences[example_index]
+        return result
 
     def construct_prompt(self, ignore_attacked_text: bool = False) -> str:
         assert self.attacked_text is not None

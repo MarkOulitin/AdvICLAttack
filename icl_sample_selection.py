@@ -49,7 +49,7 @@ class GreedyExampleSelection(ExampleSelectionStrategy):
         assert self._goal_function.ground_truth_output is not None  # self._goal_function.init_attack_example method must be invoked before this method
 
         masked_one_examples = [
-            icl_input.exclude([i]) for i in range(len(icl_input.example_sentences))
+            icl_input.exclude(i) for i in range(len(icl_input.example_sentences))
         ]
 
         masked_one_examples_results, search_over = self._goal_function.get_results(masked_one_examples)
@@ -60,20 +60,6 @@ class GreedyExampleSelection(ExampleSelectionStrategy):
         icl_input.attacked_text = AttackedText(icl_input.example_sentences[most_important_example_index])
         icl_input.pertubation_example_sentence_index = most_important_example_index
         assert icl_input.attacked_text.text == icl_input.example_sentences[most_important_example_index]
-
-class ExampleImportannceOrder(ExampleSelectionStrategy):
-
-    def __init__(self, goal_function: utils.ICLUntargetedClassification) -> None:
-        super().__init__()
-        self._goal_function: utils.ICLUntargetedClassification = goal_function
-        self.example_selection: GreedyExampleSelection = GreedyExampleSelection(goal_function)
-
-    def select_example_and_update_metadata_inplace(self, sample: utils.ICLInput):
-        """
-        Reorder examples by importance order
-        """
-        # TODO
-
 
 class ExampleSelector:
     def __init__(self,
