@@ -32,19 +32,20 @@ def main(models: list[str],
         'asr_experiment_csv_file_name': asr_experiment_csv_file_name
     }
 
+    asr_file_name_without_suffix = asr_experiment_csv_file_name.split('.')[0]
+
     # list of all experiment parameters to run
     all_params = []
     for model in models:
         for dataset in datasets:
             for num_shots in num_few_shots:
                 for seed in seeds:
-                    asr_file_name_without_suffix = asr_experiment_csv_file_name.split('.')[0]
                     p = deepcopy(default_params)
                     p['model'] = model
                     p['dataset'] = dataset
                     p['seed'] = seed
                     p['num_shots'] = num_shots
-                    p['expr_name'] = f"transferability_{p['dataset']}_{p['model']}_{p['num_shots']}_shot_{repr(p['subsample_test_set'])}_subsample_{p['seed']}_seed_{asr_file_name_without_suffix}_asr_file"
+                    p['expr_name'] = f"transferability_{p['dataset']}_{p['model']}_{p['num_shots']}_shot_{repr(p['subsample_test_set'])}_subsample_{p['seed']}_seed_asr_file_{asr_file_name_without_suffix}"
                     all_params.append(p)
 
 
