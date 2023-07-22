@@ -22,12 +22,10 @@ class FistExampleSelection(ExampleSelectionStrategy):
 
 
 class RandomExampleSelection(ExampleSelectionStrategy):
-    def __init__(self,
-                 seed: int = 0):
-        self._rng = np.random.RandomState(seed)
+    rng = np.random.RandomState(0)
 
     def select_example_and_update_metadata_inplace(self, icl_input: utils.ICLInput):
-        example_index = self._rng.choice(np.arange(0, len(icl_input.example_sentences)), 1)[0]
+        example_index = RandomExampleSelection.rng.choice(np.arange(0, len(icl_input.example_sentences)), 1)[0]
 
         icl_input.attacked_text = AttackedText(icl_input.example_sentences[example_index])
         icl_input.pertubation_example_sentence_index = example_index
@@ -40,7 +38,7 @@ class GreedyExampleSelection(ExampleSelectionStrategy):
         super().__init__()
         self._goal_function: utils.ICLUntargetedClassification = goal_function
 
-    def select_example_and_update_metadata_inplace(self, icl_input: ICLInput):
+    def select_example_and_update_metadata_inplace(self, icl_input: utils.ICLInput):
         if len(icl_input.example_sentences) != len(icl_input.example_labels):
             raise Exception('Got sample with unequal amount of examples and labels')
         if len(icl_input.example_sentences) == 0:
