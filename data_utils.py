@@ -49,7 +49,7 @@ def load_trec():
     train_sentences, train_labels = _load_file("train.txt")
     test_sentences, test_labels = _load_file("test.txt")
 
-    return train_sentences, train_labels, test_sentences, test_labels
+    return train_sentences[:3000], train_labels[:3000], test_sentences, test_labels
 
 
 def load_dbpedia():
@@ -69,7 +69,7 @@ def load_dbpedia():
     train_labels = [label - 1 for label in train_labels]  # make them 0, 1, 2, 3 instead of 1, 2, 3, 4...
     test_labels = [label - 1 for label in test_labels]
 
-    return train_sentences, train_labels, test_sentences, test_labels
+    return train_sentences[:10000], train_labels[:10000], test_sentences[:5000], test_labels[:5000]
 
 
 def load_sms_spam():
