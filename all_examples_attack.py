@@ -94,7 +94,7 @@ class ICLAllExamplesAttack(TextBuggerLi2018):
         else:
             # default strategy, choose first icl example for the attack
             icl_example_selector = get_strategy('first')
-            icl_example_selector.select_example_and_update_metadata_inplace(icl_input)
+            icl_example_selector.select_example_and_update_metadata_inplace(goal_function_result.icl_input)
 
             result = self._attack(goal_function_result)
             return result
@@ -131,28 +131,37 @@ class ICLAllExamplesSearchMethod(SearchMethod):
         return index_order, search_over
 
     def perform_search(self, initial_result: ICLClassificationGoalFunctionResult):
-        def update_attacked_text(result, example_index):
+        def update_attacked_text(result, initial_result, example_index):
             result.icl_input.pertubation_example_sentence_index = example_index
             result.icl_input.attacked_text = AttackedText(result.icl_input.example_sentences[example_index])
+            result.attacked_text = result.icl_input.attacked_text
+
             assert result.icl_input.attacked_text.text == result.icl_input.example_sentences[example_index]
+            assert result.attacked_text.text == result.icl_input.example_sentences[example_index]
 
-        def override_example_sentence(result, example_index):
-            result.icl_input.example_sentences[example_index] = result.icl_input.attacked_text.text
+            initial_result.icl_input.pertubation_example_sentence_index = example_index
+            initial_result.icl_input.attacked_text = AttackedText(initial_result.icl_input.example_sentences[example_index])
+            initial_result.attacked_text = initial_result.icl_input.attacked_text
 
-        icl_input = initial_result.icl_input
+        def override_example_sentence(result):
+            result.icl_input.example_sentences[result.icl_input.pertubation_example_sentence_index] = result.icl_input.attacked_text.text
 
-        cur_result = deepcopy(initial_result)
+        initial_result_copy = deepcopy(initial_result)
+        icl_input = initial_result_copy.icl_input
+
+        cur_result = initial_result_copy
 
         for example_index in range(len(icl_input.example_sentences)):
             # update attacked text
-            update_attacked_text(cur_result, example_index)
+            update_attacked_text(cur_result, initial_result, example_index)
 
             # Sort words by order of importance of given example index
-            index_order, search_over = self._get_index_order(cur_result.icl_input)
+            index_order, search_over = self._get_index_order(deepcopy(cur_result.icl_input))
             i = 0
+            improve_score_pertubation_num = 0
 
-            index_order = index_order[:self.example_perturbation_bounds]
-            while i < len(index_order) and not search_over:
+            index_order = index_order
+            while i < len(index_order) and improve_score_pertubation_num < self.example_perturbation_bounds and not search_over:
                 transformed_text_candidates = self.get_transformations(
                     cur_result.attacked_text,
                     original_text=initial_result.attacked_text,
@@ -162,11 +171,11 @@ class ICLAllExamplesSearchMethod(SearchMethod):
                 i += 1
                 if len(transformed_text_candidates) == 0:
                     continue
-                transformed_icl_candidates = [ICLInput(icl_input.example_sentences,
-                                                       icl_input.example_labels,
-                                                       icl_input.test_sentence,
-                                                       icl_input.params,
-                                                       icl_input.pertubation_example_sentence_index,
+                transformed_icl_candidates = [ICLInput(cur_result.icl_input.example_sentences,
+                                                       cur_result.icl_input.example_labels,
+                                                       cur_result.icl_input.test_sentence,
+                                                       cur_result.icl_input.params,
+                                                       cur_result.icl_input.pertubation_example_sentence_index,
                                                        transformed_text_candidate) for transformed_text_candidate in
                                               transformed_text_candidates]
 
@@ -175,9 +184,12 @@ class ICLAllExamplesSearchMethod(SearchMethod):
 
                 # Skip swaps which don't improve the score
                 if results[0].score > cur_result.score:
+                    # update pertubation num up until example_perturbation_bounds
+                    improve_score_pertubation_num += 1
+
                     cur_result = results[0]
                     # override example sentence
-                    override_example_sentence(cur_result, example_index)
+                    override_example_sentence(cur_result)
                 else:
                     continue
                 # If we succeeded, return the index with best similarity.
@@ -202,14 +214,12 @@ class ICLAllExamplesSearchMethod(SearchMethod):
                             best_result = result
 
                     # override example sentence
-                    override_example_sentence(cur_result, example_index)
+                    override_example_sentence(cur_result)
                     return best_result
 
                 # override example sentence
-                override_example_sentence(cur_result, example_index)
+                override_example_sentence(cur_result)
 
-        # override example sentence
-        override_example_sentence(cur_result, example_index)
         return cur_result
 
     def check_transformation_compatibility(self, transformation):
