@@ -22,6 +22,8 @@ class ICLAttacker(Attacker):
 
         No parallel processing is involved.
         """
+        self.attack_log_manager.loggers.append(AllExamplesCSVLogger(filename=f"./log_{self.experiment_name}_full_format.csv"))
+
         # add custom csv file with file color format
         self.attack_log_manager.add_output_csv(f"./log_{self.experiment_name}_diff_format.csv", "file")
 
