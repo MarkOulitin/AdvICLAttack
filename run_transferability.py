@@ -38,12 +38,13 @@ def main(models: list[str],
         for dataset in datasets:
             for num_shots in num_few_shots:
                 for seed in seeds:
+                    asr_file_name_without_suffix = asr_experiment_csv_file_name.split('.')[0]
                     p = deepcopy(default_params)
                     p['model'] = model
                     p['dataset'] = dataset
                     p['seed'] = seed
                     p['num_shots'] = num_shots
-                    p['expr_name'] = f"transferability_{p['dataset']}_{p['model']}_{p['num_shots']}_shot_{repr(p['subsample_test_set'])}_subsample_{p['seed']}_seed"
+                    p['expr_name'] = f"transferability_{p['dataset']}_{p['model']}_{p['num_shots']}_shot_{repr(p['subsample_test_set'])}_subsample_{p['seed']}_seed_{asr_file_name_without_suffix}_asr_file"
                     all_params.append(p)
 
 
@@ -99,7 +100,7 @@ def run_experiments(params_list):
                                                                                       params)
 
 
-        attacker = ICLAttacker(experiment_name, attack, attack_dataset, attack_args)
+        attacker = ICLAttacker(experiment_name, attack, attack_dataset, attack_args, transferability=True)
         attacker.attack_dataset()
 
 
@@ -135,16 +136,23 @@ def setup_transferability_attack_experiment(llm,
     original_texts, adversarial_demonstrations = extract_adversarial_demonstrations(params['asr_experiment_csv_file_name'])
 
     for original_demonstration, adversarial_demonstration in zip(original_texts, adversarial_demonstrations):
-        # search adversarial demonstration index in the examples pool
-        adversarial_demonstration_index = example_sentences.index(original_demonstration)
-        experiment_name += "demonstration" + str(adversarial_demonstration_index)  # include demonstration index in experiment's name
+        original_examples = original_demonstration.split("!@icl_attack_seperator@!")
+        adversarial_examples = adversarial_demonstration.split("!@icl_attack_seperator@!")
 
-        attack_dataset = ICLTransferabilityDataset(original_demonstration,
-                                                   adversarial_demonstration,
-                                                   adversarial_demonstration_index,
-                                                   test_sentences, test_labels,
-                                                   example_sentences, example_labels,
-                                                   params['num_shots'], params)
+        # search adversarial demonstration index in the examples pool
+        adversarial_example_indices = [example_sentences.index(example) for example in original_examples]
+        indices_str = '_'.join(map(str, adversarial_example_indices))
+        experiment_name += f"_examples_{indices_str}"  # include examples indices in experiment's name
+
+        attack_dataset = ICLTransferabilityDataset(original_examples,
+                                                   adversarial_examples,
+                                                   adversarial_example_indices,
+                                                   test_sentences,
+                                                   test_labels,
+                                                   example_sentences,
+                                                   example_labels,
+                                                   params['num_shots'],
+                                                   params)
 
         attack_args = textattack.AttackArgs(
             num_examples=len(attack_dataset),

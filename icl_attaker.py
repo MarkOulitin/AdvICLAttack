@@ -6,10 +6,13 @@ from textattack.attack_results import SkippedAttackResult, SuccessfulAttackResul
 import tqdm
 from textattack.shared.utils import logger
 
+from custom_loggers import AllExamplesCSVLogger
+
 
 class ICLAttacker(Attacker):
-    def __init__(self, experiment_name, attack, dataset, attack_args=None):
+    def __init__(self, experiment_name, attack, dataset, attack_args=None, transferability: bool = False):
         self.experiment_name = experiment_name
+        self.transferability = transferability
 
         super().__init__(
             attack,
@@ -78,12 +81,18 @@ class ICLAttacker(Attacker):
         while worklist:
             idx = worklist.popleft()
             try:
-                icl_input, ground_truth_output = self.dataset[idx]
+                if not self.transferability:
+                    icl_input, ground_truth_output = self.dataset[idx]
+                else:
+                    attacked_icl_input, original_icl_input, ground_truth_output = self.dataset[idx]
             except IndexError:
                 continue
 
             try:
-                result = self.attack.attack(icl_input, ground_truth_output)
+                if not self.transferability:
+                    result = self.attack.attack(icl_input, ground_truth_output)
+                else:
+                    result = self.attack.attack(attacked_icl_input, original_icl_input, ground_truth_output)
             except Exception as e:
                 raise e
             if (

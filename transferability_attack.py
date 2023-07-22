@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from textattack.attack_recipes import AttackRecipe
 from textattack.attack_results import SkippedAttackResult
 from textattack.goal_function_results import GoalFunctionResultStatus
@@ -11,7 +13,7 @@ from icl_input import ICLInput
 class ICLTransferabilitySearch(SearchMethod):
 
     def perform_search(self, initial_result: ICLClassificationGoalFunctionResult):
-        icl_input = initial_result.icl_input
+        icl_input = deepcopy(initial_result.icl_input)
 
         results, _ = self.get_goal_results([icl_input])
         result = results[0] if len(results) else None
@@ -40,20 +42,22 @@ class ICLTransferabilityAttack(AttackRecipe):
 
         return ICLTransferabilityAttack(goal_function, constraints, transformation, search_method)
 
-    def attack(self, icl_input: ICLInput, ground_truth_output):
+    def attack(self, attacked_icl_input: ICLInput, original_icl_input: ICLInput, ground_truth_output):
         assert isinstance(
             ground_truth_output, (int, str)
         ), "`ground_truth_output` must either be `str` or `int`."
 
         self.goal_function.model.ignore_attacked_text = True
         goal_function_result, _ = self.goal_function.init_attack_example(
-            icl_input, ground_truth_output
+            original_icl_input, ground_truth_output
         )
 
         if goal_function_result.goal_status == GoalFunctionResultStatus.SKIPPED:
             return SkippedAttackResult(goal_function_result)
         else:
-            self.goal_function.model.ignore_attacked_text = False
+            # self.goal_function.model.ignore_attacked_text = False
+            goal_function_result.icl_input = attacked_icl_input
+            goal_function_result.attacked_text = attacked_icl_input.attacked_text
 
             result = self._attack(goal_function_result)
             return result
