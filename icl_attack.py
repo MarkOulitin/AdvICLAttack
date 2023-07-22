@@ -74,7 +74,7 @@ class ICLAttack(TextBuggerLi2018):
 
         return ICLAttack(goal_function, constraints, transformation, search_method)
 
-    def attack(self, icl_input: ICLInput, ground_truth_output, example_selection_strategy: str = None):
+    def attack(self, icl_input: ICLInput, ground_truth_output, example_selection_strategy: str):
         assert isinstance(
             ground_truth_output, (int, str)
         ), "`ground_truth_output` must either be `str` or `int`."
@@ -85,11 +85,7 @@ class ICLAttack(TextBuggerLi2018):
         if goal_function_result.goal_status == GoalFunctionResultStatus.SKIPPED:
             return SkippedAttackResult(goal_function_result)
         else:
-            # default strategy, choose random icl example for the attack
-            if example_selection_strategy is None:
-                icl_example_selector = get_strategy('random')
-            else:
-                icl_example_selector = get_strategy(example_selection_strategy, self.goal_function)
+            icl_example_selector = get_strategy(example_selection_strategy, self.goal_function)
             icl_example_selector.select_example_and_update_metadata_inplace(goal_function_result.icl_input)
             goal_function_result.attacked_text = goal_function_result.icl_input.attacked_text
 

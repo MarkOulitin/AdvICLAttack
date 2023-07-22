@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import re
 from abc import ABC, abstractmethod
 
 import numpy as np
 from textattack.shared import AttackedText
 
 import attack_utils as utils
+
 
 class ExampleSelectionStrategy(ABC):
     @abstractmethod
@@ -60,6 +60,7 @@ class GreedyExampleSelection(ExampleSelectionStrategy):
         icl_input.attacked_text = AttackedText(icl_input.example_sentences[most_important_example_index])
         icl_input.pertubation_example_sentence_index = most_important_example_index
         assert icl_input.attacked_text.text == icl_input.example_sentences[most_important_example_index]
+
 
 class ExampleSelector:
     def __init__(self,

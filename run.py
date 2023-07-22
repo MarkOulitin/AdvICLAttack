@@ -20,6 +20,7 @@ def main(models: list[str],
          datasets: list[str],
          seeds: list[int],
          num_few_shots: list[int],
+         example_selection_strategy: str,
          subsample_test_set: int,
          api_num_logprob: int,
          use_saved_results: bool,
@@ -31,7 +32,8 @@ def main(models: list[str],
         'conditioned_on_correct_classes': True,
         'subsample_test_set': subsample_test_set,
         'api_num_logprob': api_num_logprob,
-        'batch_size': batch_size
+        'batch_size': batch_size,
+        'example_selection_strategy': example_selection_strategy
     }
 
     # list of all experiment parameters to run
@@ -45,7 +47,7 @@ def main(models: list[str],
                     p['dataset'] = dataset
                     p['seed'] = seed
                     p['num_shots'] = num_shots
-                    p['expr_name'] = f"{p['dataset']}_{p['model']}_{p['num_shots']}_shot_{repr(p['subsample_test_set'])}_subsample_{p['seed']}_seed"
+                    p['expr_name'] = f"{p['dataset']}_{p['model']}_{p['num_shots']}_shot_{repr(p['subsample_test_set'])}_subsample_{p['seed']}_seed_{p['example_selection_strategy']}_selection"
                     all_params.append(p)
 
     # query the model and save the responses
@@ -103,7 +105,8 @@ def run_experiments(params_list):
                                                                                    experiment_name,
                                                                                    params)
 
-        attacker = ICLAttacker(experiment_name, attack, attack_dataset, attack_args)
+        attacker = ICLAttacker(experiment_name, attack, attack_dataset, attack_args,
+                               example_selection_strategy=params['example_selection_strategy'])
         attacker.attack_dataset()
 
 
@@ -180,6 +183,8 @@ if __name__ == '__main__':
                         help='seeds for the training set')
     parser.add_argument('--num_few_shots', dest='num_few_shots', action='store', required=True,
                         help='num training examples to use')
+    parser.add_argument('--example_selection_strategy', dest='example_selection_strategy', action='store',
+                        default='random', help='example selection strategy, random/greedy-example')
     # other arguments
     parser.add_argument('--subsample_test_set', dest='subsample_test_set', action='store', required=False, type=int,
                         default=None, help='size of test set to use to speed up eval. None means using all test set')

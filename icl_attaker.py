@@ -10,9 +10,10 @@ from custom_loggers import AllExamplesCSVLogger
 
 
 class ICLAttacker(Attacker):
-    def __init__(self, experiment_name, attack, dataset, attack_args=None, transferability: bool = False):
+    def __init__(self, experiment_name, attack, dataset, attack_args=None, transferability: bool = False, example_selection_strategy: str = None):
         self.experiment_name = experiment_name
         self.transferability = transferability
+        self.example_selection_strategy = example_selection_strategy
 
         super().__init__(
             attack,
@@ -90,7 +91,10 @@ class ICLAttacker(Attacker):
 
             try:
                 if not self.transferability:
-                    result = self.attack.attack(icl_input, ground_truth_output)
+                    if 'all_examples' in self.experiment_name:
+                        result = self.attack.attack(icl_input, ground_truth_output)
+                    else:
+                        result = self.attack.attack(icl_input, ground_truth_output, self.example_selection_strategy)
                 else:
                     result = self.attack.attack(attacked_icl_input, original_icl_input, ground_truth_output)
             except Exception as e:
