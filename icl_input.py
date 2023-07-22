@@ -27,15 +27,18 @@ class ICLInput:
             icl_example_selector.select_example_and_update_metadata_inplace(self)
 
     def exclude(self, example_index: int) -> ICLInput:
+        example_sentences = [sentence for i, sentence in enumerate(self.example_sentences) if i != example_index]
+        example_labels = [label for i, label in enumerate(self.example_labels) if i != example_index]
+
         result = ICLInput(
-            example_sentences=[self.example_sentences[example_index]],
-            example_labels=[self.example_labels[example_index]],
+            example_sentences=example_sentences,
+            example_labels=example_labels,
             test_sentence=self.test_sentence,
             params=self.params,
-            pertubation_example_sentence_index = example_index,
-            attacked_text = AttackedText(self.example_sentences[example_index]),
+            pertubation_example_sentence_index=self.pertubation_example_sentence_index,
+            attacked_text=self.attacked_text
         )
-        assert result.attacked_text.text == self.example_sentences[example_index]
+
         return result
 
     def construct_prompt(self, ignore_attacked_text: bool = False) -> str:
