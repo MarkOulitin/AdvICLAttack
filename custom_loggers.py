@@ -20,16 +20,6 @@ class AllExamplesCSVLogger(Logger):
         self._flushed = True
 
     def log_attack_result(self, result):
-        #result.original_result.icl_input.construct_prompt()
-        #result.perturbed_result.icl_input.construct_prompt() TODO
-        #result.original_result.icl_input.example_sentences[result.original_result.icl_input.pertubation_example_sentence_index] = result.original_result.icl_input.attacked_text.text
-
-        # we update the example sentences for icl attack, all exampels attack is already handled
-        # result.perturbed_result.icl_input.example_sentences[result.perturbed_result.icl_input.pertubation_example_sentence_index] = result.perturbed_result.attacked_text.text
-
-        # print("final")
-        # print(result.original_result.icl_input.example_sentences)
-        # print("##############")
         original_text = '!@icl_attack_seperator@!'.join(result.original_result.icl_input.example_sentences)
         perturbed_text = '!@icl_attack_seperator@!'.join(result.perturbed_result.icl_input.example_sentences)
         result_type = result.__class__.__name__.replace("AttackResult", "")
