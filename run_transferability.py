@@ -164,6 +164,7 @@ def setup_transferability_attack_experiment(llm,
             checkpoint_interval=100,
             checkpoint_dir="./checkpoints",
             disable_stdout=True,
+            random_seed=params['seed'],
         )
 
         return attack, attack_dataset, attack_args

@@ -133,6 +133,7 @@ def setup_attack_success_rate_experiment(llm,
         checkpoint_interval=100,
         checkpoint_dir="./checkpoints",
         disable_stdout=True,
+        random_seed=params['seed'],
         # query_budget=60,  # TODO remove
     )
 
