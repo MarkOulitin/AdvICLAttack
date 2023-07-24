@@ -29,7 +29,8 @@ class ICLAttacker(Attacker):
         self.attack_log_manager.loggers.append(AllExamplesCSVLogger(filename=f"./log_{self.experiment_name}_full_format.csv"))
 
         # add custom csv file with file color format
-        self.attack_log_manager.add_output_csv(f"./log_{self.experiment_name}_diff_format.csv", "file")
+        if self.example_selection_strategy is not None:
+            self.attack_log_manager.add_output_csv(f"./log_{self.experiment_name}_diff_format.csv", "file")
 
         if torch.cuda.is_available():
             self.attack.cuda_()
