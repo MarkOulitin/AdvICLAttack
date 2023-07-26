@@ -69,7 +69,7 @@ def load_dbpedia():
     train_labels = [label - 1 for label in train_labels]  # make them 0, 1, 2, 3 instead of 1, 2, 3, 4...
     test_labels = [label - 1 for label in test_labels]
 
-    return train_sentences[:5000], train_labels[:5000], test_sentences[:1500], test_labels[:1500]
+    return train_sentences[:5000], train_labels[:5000], test_sentences[:1000], test_labels[:1000]
 
 
 def load_sms_spam():
