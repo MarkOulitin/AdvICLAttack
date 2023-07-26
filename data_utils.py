@@ -118,7 +118,12 @@ def load_ethos_binary():
     y = df['label'].values
 
     train_sentences, test_sentences, train_labels, test_labels = train_test_split(X, y, test_size=0.3, random_state=2)
-    return train_sentences.tolist(), train_labels.tolist(), test_sentences.tolist(), test_labels.tolist()
+    train_sentences = train_sentences.tolist()
+    train_labels = train_labels.tolist()
+    train_labels = [label for text, label in zip(train_sentences, train_labels) if len(text.split(" ")) < 25]
+    train_sentences = [text for text in train_sentences if len(text.split(" ")) < 25]
+
+    return train_sentences, train_labels, test_sentences.tolist(), test_labels.tolist()
 
 def load_dataset(params):
     """
