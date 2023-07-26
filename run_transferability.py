@@ -113,7 +113,7 @@ def setup_transferability_attack_experiment(llm,
                                             example_labels,
                                             experiment_name,
                                             params):
-    def extract_adversarial_demonstrations(csv_file_name: str, top_k: int = 3) -> Tuple[list[str], list[str]]:
+    def extract_adversarial_demonstrations(csv_file_name: str, top_k: int = 1) -> Tuple[list[str], list[str]]:
         df = pd.read_csv(csv_file_name)
 
         # Filter rows where result_type is 'Successful'
@@ -122,7 +122,7 @@ def setup_transferability_attack_experiment(llm,
         # Calculate the difference between perturbed_score and original_score
         filtered_df['score_difference'] = filtered_df['perturbed_score'] - filtered_df['original_score']
 
-        # Sort by score_difference in descending order and select the top 10 rows
+        # Sort by score_difference in descending order and select the top k rows
         top_k_rows = filtered_df.nlargest(top_k, 'score_difference')
 
         original_texts = top_k_rows['original_text'].tolist()
@@ -133,7 +133,7 @@ def setup_transferability_attack_experiment(llm,
     icl_model_wrapper = ICLModelWrapper(llm, device)
     attack = ICLTransferabilityAttack.build(icl_model_wrapper)
 
-    # extract top 3 adversarial demonstrations
+    # extract top 1 adversarial demonstrations
     original_texts, adversarial_demonstrations = extract_adversarial_demonstrations(params['asr_experiment_csv_file_name'])
 
     for original_demonstration, adversarial_demonstration in zip(original_texts, adversarial_demonstrations):
