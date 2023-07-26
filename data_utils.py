@@ -108,6 +108,18 @@ def load_parler_hate():
     return train_sentences.tolist(), train_labels.tolist(), test_sentences.tolist(), test_labels.tolist()
 
 
+def load_ethos_binary():
+    from datasets import load_dataset
+
+    dataset = load_dataset("ethos", "binary")
+    df = dataset['train'].to_pandas()
+
+    X = df['text'].values
+    y = df['label'].values
+
+    train_sentences, test_sentences, train_labels, test_labels = train_test_split(X, y, test_size=0.3, random_state=2)
+    return train_sentences.tolist(), train_labels.tolist(), test_sentences.tolist(), test_labels.tolist()
+
 def load_dataset(params):
     """
     Load train and test data
@@ -162,6 +174,16 @@ def load_dataset(params):
         params["a_prefix"] = "Hate rate: "
         params['label_dict'] = {0: ['1'], 1: ['2'], 2: ['3'], 3: ['4'], 4: ['5']}
         params['inv_label_dict'] = {'1': 0, '2': 1, '3': 2, '4': 3, '5': 4}
+        params['task_format'] = 'classification'
+        params['num_tokens_to_predict'] = 1
+
+    elif params['dataset'] == 'ethos':
+        orig_train_sentences, orig_train_labels, orig_test_sentences, orig_test_labels = load_ethos_binary()
+        params['prompt_prefix'] = "Choose if comment text's hate speech is presence or absence.\n\n"
+        params["q_prefix"] = "Comment: "
+        params["a_prefix"] = "Hate speech: "
+        params['label_dict'] = {0: ['absence'], 1: ['presence']}
+        params['inv_label_dict'] = {'absence': 0, 'presence': 1}
         params['task_format'] = 'classification'
         params['num_tokens_to_predict'] = 1
 
